@@ -11,3 +11,18 @@ test_consumer:
 
 start_airflow:
 	docker compose -f docker-compose.airflow.yaml up -d
+
+docker-compose-kafka-up:
+	docker compose -f docker-compose.kafka.yaml up -d
+
+docker-compose-kafka-down:
+	docker compose -f docker-compose.kafka.yaml down
+
+docker-compose-airflow-up:
+	docker compose -f src/airflow/docker-compose.airflow.yaml up -d
+
+docker-compose-airflow-down:
+	docker compose -f src/airflow/docker-compose.airflow.yaml down
+
+docker-compose-airflow-restart:
+	docker compose -f src/airflow/docker-compose.airflow.yaml restart
