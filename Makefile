@@ -1,28 +1,70 @@
-.PHONY: test_producer test_consumer
+# Declare all phony targets
+.PHONY: test producer consumer up down restart all clean logs help
 
+# Configuration
+KAFKA_COMPOSE_FILE := docker-compose.kafka.yaml
+AIRFLOW_COMPOSE_FILE := src/airflow/docker-compose.airflow.yaml
+MINIO_COMPOSE_FILE := docker-compose.minio.yaml
+PYTHON := python3
 
-test_producer:
-	python3 test/data_ingestion/kafka_producer/produce_json.py
-				
+# Data Ingestion and Streaming Tests
+producer:
+	$(PYTHON) test/data_ingestion/kafka_producer/produce_json.py
 
-test_consumer:
-	python3 -m src.streaming.main
+consumer:
+	$(PYTHON) -m src.streaming.main
 
+# Docker Compose Commands
+up-kafka:
+	docker compose -f $(KAFKA_COMPOSE_FILE) up -d
 
-start_airflow:
-	docker compose -f docker-compose.airflow.yaml up -d
+up-airflow:
+	docker compose -f $(AIRFLOW_COMPOSE_FILE) up -d
 
-docker-compose-kafka-up:
-	docker compose -f docker-compose.kafka.yaml up -d
+up-minio:
+	docker compose -f $(MINIO_COMPOSE_FILE) up -d
 
-docker-compose-kafka-down:
-	docker compose -f docker-compose.kafka.yaml down
+down-kafka:
+	docker compose -f $(KAFKA_COMPOSE_FILE) down
 
-docker-compose-airflow-up:
-	docker compose -f src/airflow/docker-compose.airflow.yaml up -d
+down-airflow:
+	docker compose -f $(AIRFLOW_COMPOSE_FILE) down
 
-docker-compose-airflow-down:
-	docker compose -f src/airflow/docker-compose.airflow.yaml down
+down-minio:
+	docker compose -f $(MINIO_COMPOSE_FILE) down
 
-docker-compose-airflow-restart:
-	docker compose -f src/airflow/docker-compose.airflow.yaml restart
+restart-kafka: down-kafka up-kafka
+restart-airflow: down-airflow up-airflow
+restart-minio: down-minio up-minio
+
+# Convenience Commands
+up: up-kafka up-airflow up-minio
+down: down-kafka down-airflow down-minio
+restart: down up
+
+# Utility Commands
+logs-kafka:
+	docker compose -f $(KAFKA_COMPOSE_FILE) logs -f
+
+logs-airflow:
+	docker compose -f $(AIRFLOW_COMPOSE_FILE) logs -f
+
+logs-minio:
+	docker compose -f $(MINIO_COMPOSE_FILE) logs -f
+
+clean:
+	docker compose -f $(KAFKA_COMPOSE_FILE) down -v
+	docker compose -f $(AIRFLOW_COMPOSE_FILE) down -v
+	docker compose -f $(MINIO_COMPOSE_FILE) down -v
+	docker system prune -f
+
+# Help Command
+help:
+	@echo "Available commands:"
+	@echo "  make producer         - Run Kafka producer test"
+	@echo "  make consumer         - Run Kafka consumer test"
+	@echo "  make up              - Start all services"
+	@echo "  make down            - Stop all services"
+	@echo "  make restart         - Restart all services"
+	@echo "  make clean           - Remove all containers and volumes"
+	@echo "  make logs-<service>  - View logs for specific service"
