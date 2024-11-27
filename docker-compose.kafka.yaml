@@ -1,0 +1,166 @@
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: flink-zookeeper
+    ports:
+      - "2181:2181"
+    healthcheck:
+      test: echo srvr | nc zookeeper 2181 || exit 1
+      start_period: 10s
+      retries: 20
+      interval: 10s
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+
+  # Kafka broker, all configurations you can take a look
+  # at https://docs.confluent.io/platform/current/installation/docker/config-reference.html
+  broker:
+    image: confluentinc/cp-server:7.5.0
+    container_name: flink-broker
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    ports:
+      - "9092:9092"
+      - "9101:9101"
+    healthcheck:
+      test: nc -z localhost 9092 || exit -1
+      start_period: 15s
+      interval: 5s
+      timeout: 10s
+      retries: 10
+    environment:
+      # ID of the broker in a cluster
+      KAFKA_BROKER_ID:
+        1
+        # Connect to Zoo Keeper for distributed coordination and leader election
+      KAFKA_ZOOKEEPER_CONNECT: "zookeeper:2181"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      # Define how clients connect to brokers
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://broker:29092,PLAINTEXT_HOST://localhost:9092
+      # How many copies are maintained for fault tolerance
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      # Schema Registry URL for storing and managing Avro schemas
+      KAFKA_CONFLUENT_SCHEMA_REGISTRY_URL: http://schema-registry:8081
+      # Confluent Metrics Reporter for Control Center Cluster Monitoring
+      KAFKA_METRIC_REPORTERS: io.confluent.metrics.reporter.ConfluentMetricsReporter
+      CONFLUENT_METRICS_REPORTER_BOOTSTRAP_SERVERS: "broker:9092"
+      CONFLUENT_METRICS_REPORTER_TOPIC_REPLICAS: 1
+      CONFLUENT_METRICS_ENABLE: "true"
+      # For fixing the bug replication factor 3 > the number of node
+      KAFKA_CONFLUENT_BALANCER_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+
+  # For managing Avro schemas
+  schema-registry:
+    image: confluentinc/cp-schema-registry:7.5.0
+    container_name: flink-schema-registry
+    depends_on:
+      - broker
+    ports:
+      - "8081:8081"
+    healthcheck:
+      start_period: 10s
+      interval: 10s
+      retries: 20
+      test: curl --user superUser:superUser --fail --silent --insecure http://localhost:8081/subjects --output /dev/null || exit 1
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: "broker:29092"
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+
+  # For connecting to offline store
+  connect:
+    image: confluentinc/cp-kafka-connect:7.5.0
+    container_name: flink-connect
+    depends_on:
+      broker:
+        condition: service_healthy
+      schema-registry:
+        condition: service_healthy
+      zookeeper:
+        condition: service_healthy
+    ports:
+      - "8083:8083"
+    environment:
+      CONNECT_BOOTSTRAP_SERVERS: "broker:29092"
+      CONNECT_REST_ADVERTISED_HOST_NAME: connect
+      CONNECT_REST_PORT: 8083
+      CONNECT_GROUP_ID: compose-connect-group
+      CONNECT_CONFIG_STORAGE_TOPIC: docker-connect-configs
+      CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_OFFSET_FLUSH_INTERVAL_MS: 10000
+      CONNECT_OFFSET_STORAGE_TOPIC: docker-connect-offsets
+      CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_STATUS_STORAGE_TOPIC: docker-connect-status
+      CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_KEY_CONVERTER: org.apache.kafka.connect.storage.StringConverter
+      CONNECT_KEY_CONVERTER_SCHEMAS_ENABLE: false
+      CONNECT_VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      CONNECT_VALUE_CONVERTER_SCHEMAS_ENABLE: true
+      CONNECT_PLUGIN_PATH: "/usr/share/java,/etc/kafka-connect/jars"
+    volumes:
+      # Make sure to run `chmod -R 777 data_ingestion/kafka_connect/jars/` to give the correct permissions to the folder
+      - $PWD/src/streaming/connectors/config/jars/kafka_connect/jars/:/etc/kafka-connect/jars
+
+  # Confluent control center to manage Kafka
+  control-center:
+    image: confluentinc/cp-enterprise-control-center:7.5.0
+    container_name: flink-control-center
+    depends_on:
+      - broker
+      - schema-registry
+      - connect
+    ports:
+      - "9021:9021"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9021/healthcheck"] # Adjust the URL and options as needed
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    environment:
+      CONTROL_CENTER_BOOTSTRAP_SERVERS: "broker:29092"
+      CONTROL_CENTER_CONNECT_CONNECT-DEFAULT_CLUSTER: "connect:8083"
+      CONTROL_CENTER_SCHEMA_REGISTRY_URL: "http://schema-registry:8081"
+      CONTROL_CENTER_REPLICATION_FACTOR: 1
+      CONTROL_CENTER_INTERNAL_TOPICS_PARTITIONS: 1
+      CONTROL_CENTER_CONNECT_HEALTHCHECK_ENDPOINT: "/connectors"
+      CONFLUENT_METRICS_TOPIC_REPLICATION: 1
+
+  # Offline store
+  timescaledb:
+    image: timescale/timescaledb:latest-pg13
+    command: postgres -c shared_preload_libraries=timescaledb
+    container_name: flink-timescaledb
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD", "psql", "-U", "k6", "-c", "SELECT 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    environment:
+      - PGDATA=/var/lib/postgresql/data/timescaledb
+      - POSTGRES_DB=k6
+      - POSTGRES_USER=k6
+      - POSTGRES_PASSWORD=k6
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  # Simulation of sending messages to Kafka topics
+  kafka_producer:
+    container_name: flink-kafka-producer
+    build:
+      context: src/data_ingestion
+      dockerfile: kafka_producer/Dockerfile
+    depends_on:
+      broker:
+        condition: service_healthy
+      timescaledb:
+        condition: service_healthy
+
+volumes:
+  # Volume for TimescaleDB
+  pgdata:
