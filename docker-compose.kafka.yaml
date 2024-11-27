@@ -100,10 +100,20 @@ services:
       CONNECT_KEY_CONVERTER_SCHEMAS_ENABLE: false
       CONNECT_VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
       CONNECT_VALUE_CONVERTER_SCHEMAS_ENABLE: true
-      CONNECT_PLUGIN_PATH: "/usr/share/java,/etc/kafka-connect/jars"
+      CONNECT_PLUGIN_PATH: "/usr/share/java,/usr/share/confluent-hub-components,/etc/kafka-connect/jars"
+      # AWS Credentials
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
     volumes:
-      # Make sure to run `chmod -R 777 data_ingestion/kafka_connect/jars/` to give the correct permissions to the folder
       - $PWD/src/streaming/connectors/config/jars/kafka_connect/jars/:/etc/kafka-connect/jars
+    command: 
+      - bash 
+      - -c 
+      - |
+        echo "Installing connector plugins"
+        confluent-hub install --no-prompt confluentinc/kafka-connect-s3:10.5.7
+        echo "Launching Kafka Connect worker"
+        /etc/confluent/docker/run
 
   # Confluent control center to manage Kafka
   control-center:
