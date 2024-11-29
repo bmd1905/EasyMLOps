@@ -12,6 +12,8 @@ services:
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      - easydatapipeline_default
 
   # Kafka broker, all configurations you can take a look
   # at https://docs.confluent.io/platform/current/installation/docker/config-reference.html
@@ -52,6 +54,8 @@ services:
       KAFKA_CONFLUENT_BALANCER_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+    networks:
+      - easydatapipeline_default
 
   # For managing Avro schemas
   schema-registry:
@@ -70,6 +74,8 @@ services:
       SCHEMA_REGISTRY_HOST_NAME: schema-registry
       SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: "broker:29092"
       SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+    networks:
+      - easydatapipeline_default
 
   # For connecting to offline store
   connect:
@@ -114,6 +120,8 @@ services:
         confluent-hub install --no-prompt confluentinc/kafka-connect-s3:10.5.7
         echo "Launching Kafka Connect worker"
         /etc/confluent/docker/run
+    networks:
+      - easydatapipeline_default
 
   # Confluent control center to manage Kafka
   control-center:
@@ -138,6 +146,8 @@ services:
       CONTROL_CENTER_INTERNAL_TOPICS_PARTITIONS: 1
       CONTROL_CENTER_CONNECT_HEALTHCHECK_ENDPOINT: "/connectors"
       CONFLUENT_METRICS_TOPIC_REPLICATION: 1
+    networks:
+      - easydatapipeline_default
 
   # Offline store
   timescaledb:
@@ -158,6 +168,8 @@ services:
       - POSTGRES_PASSWORD=k6
     volumes:
       - pgdata:/var/lib/postgresql/data
+    networks:
+      - easydatapipeline_default
 
   # Simulation of sending messages to Kafka topics
   kafka_producer:
@@ -170,7 +182,13 @@ services:
         condition: service_healthy
       timescaledb:
         condition: service_healthy
+    networks:
+      - easydatapipeline_default
 
 volumes:
   # Volume for TimescaleDB
   pgdata:
+
+networks:
+  easydatapipeline_default:
+    external: true

@@ -15,6 +15,11 @@ if [[ -z "$cmd" ]]; then
     exit 1
 fi
 
+# Load environment variables from .env file if it exists
+if [ -f .env ]; then
+    export $(cat .env | grep -v '^#' | xargs)
+fi
+
 case $cmd in
     register_connector)
         if [[ -z "$2" ]]; then
@@ -23,9 +28,21 @@ case $cmd in
             exit 1
         else
             echo "Registering a new connector from $2"
-            # Assign a connector config path such as: kafka_connect_jdbc/configs/connect-timescaledb-sink.json
-            # Please see here for more details https://docs.confluent.io/kafka-connectors/jdbc/current/source-connector/overview.html
-            curl -X POST -H 'Content-Type: application/json' -d @$2  http://localhost:8083/connectors
+            # First, process the config file to replace environment variables
+            processed_config=$(cat "$2" | envsubst)
+            
+            # Then send the processed config to Kafka Connect
+            echo "Processed config:"
+            echo "$processed_config"
+            echo "$processed_config" | curl -X POST -H 'Content-Type: application/json' --data-binary @- http://localhost:8083/connectors
+            
+            # Check the response
+            if [ $? -eq 0 ]; then
+                echo "Connector registered successfully"
+            else
+                echo "Failed to register connector"
+                exit 1
+            fi
         fi
         ;;
     generate_schemas)
