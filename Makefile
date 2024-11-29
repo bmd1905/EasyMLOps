@@ -8,13 +8,19 @@ MINIO_COMPOSE_FILE := docker-compose.minio.yaml
 PYTHON := python3
 
 # Data Ingestion and Streaming Tests
-producer:
+producer_json:
 	$(PYTHON) test/data_ingestion/kafka_producer/produce_json.py
+
+producer_avro:
+	$(PYTHON) test/data_ingestion/kafka_producer/produce_avro.py --schema_registry_server=http://localhost:8081
 
 consumer:
 	$(PYTHON) -m src.streaming.main
 
 # Docker Compose Commands
+up-network:
+	docker network create easydatapipeline_default
+
 up-kafka:
 	docker compose -f $(KAFKA_COMPOSE_FILE) up -d
 
@@ -68,3 +74,10 @@ help:
 	@echo "  make restart         - Restart all services"
 	@echo "  make clean           - Remove all containers and volumes"
 	@echo "  make logs-<service>  - View logs for specific service"
+
+
+# test123:
+# 	docker network create easydatapipeline_default
+# 	docker compose -f flink-compose.yaml up -d \
+# 	&& docker compose -f cdc-compose.yaml up -d \
+# 	&& docker compose -f kafka-compose.yaml up -d
