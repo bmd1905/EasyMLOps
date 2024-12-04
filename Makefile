@@ -5,6 +5,7 @@
 KAFKA_COMPOSE_FILE := docker-compose.kafka.yaml
 AIRFLOW_COMPOSE_FILE := src/airflow/docker-compose.airflow.yaml
 MINIO_COMPOSE_FILE := docker-compose.minio.yaml
+DWH_COMPOSE_FILE := docker-compose.dwh.yaml
 PYTHON := python3
 
 # Data Ingestion and Streaming Tests
@@ -30,6 +31,9 @@ up-airflow:
 up-minio:
 	docker compose -f $(MINIO_COMPOSE_FILE) up -d
 
+up-dwh:
+	docker compose -f $(DWH_COMPOSE_FILE) up -d
+
 down-kafka:
 	docker compose -f $(KAFKA_COMPOSE_FILE) down
 
@@ -39,13 +43,17 @@ down-airflow:
 down-minio:
 	docker compose -f $(MINIO_COMPOSE_FILE) down
 
+down-dwh:
+	docker compose -f $(DWH_COMPOSE_FILE) down
+
 restart-kafka: down-kafka up-kafka
 restart-airflow: down-airflow up-airflow
 restart-minio: down-minio up-minio
+restart-dwh: down-dwh up-dwh
 
 # Convenience Commands
-up: up-kafka up-airflow up-minio
-down: down-kafka down-airflow down-minio
+up: up-kafka up-airflow up-minio up-dwh
+down: down-kafka down-airflow down-minio down-dwh
 restart: down up
 
 # Utility Commands
@@ -58,10 +66,14 @@ logs-airflow:
 logs-minio:
 	docker compose -f $(MINIO_COMPOSE_FILE) logs -f
 
+logs-dwh:
+	docker compose -f $(DWH_COMPOSE_FILE) logs -f
+
 clean:
 	docker compose -f $(KAFKA_COMPOSE_FILE) down -v
 	docker compose -f $(AIRFLOW_COMPOSE_FILE) down -v
 	docker compose -f $(MINIO_COMPOSE_FILE) down -v
+	docker compose -f $(DWH_COMPOSE_FILE) down -v
 	docker system prune -f
 
 # Help Command
@@ -74,10 +86,3 @@ help:
 	@echo "  make restart         - Restart all services"
 	@echo "  make clean           - Remove all containers and volumes"
 	@echo "  make logs-<service>  - View logs for specific service"
-
-
-# test123:
-# 	docker network create easydatapipeline_default
-# 	docker compose -f flink-compose.yaml up -d \
-# 	&& docker compose -f cdc-compose.yaml up -d \
-# 	&& docker compose -f kafka-compose.yaml up -d
