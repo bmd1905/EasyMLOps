@@ -6,13 +6,15 @@ from time import sleep
 
 import numpy as np
 from bson import json_util
+from dotenv import load_dotenv
 from kafka import KafkaAdminClient, KafkaProducer
 from kafka.admin import NewTopic
 
-TOPICS = "input-topic"
-GROUP_ID = "flink-group"
-OUTPUT_TOPIC = "output-topic"
-BOOTSTRAP_SERVERS = "localhost:9092"
+load_dotenv()
+
+GROUP_ID = os.getenv("KAFKA_GROUP_ID", "flink-group")
+OUTPUT_TOPICS = os.getenv("KAFKA_OUTPUT_TOPICS", "raw-events-topic")
+BOOTSTRAP_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "broker:9092")
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
@@ -85,7 +87,7 @@ def create_streams(servers, schemas_path):
                 data[field["name"]] = np.random.rand()
 
         # Get topic name for this device
-        topic_name = TOPICS
+        topic_name = OUTPUT_TOPICS
 
         # Create a new topic for this device id if not exists
         create_topic(admin, topic_name=topic_name)
@@ -124,9 +126,9 @@ if __name__ == "__main__":
     print("Tearing down all existing topics!")
     for device_id in range(NUM_DEVICES):
         try:
-            teardown_stream(f"{TOPICS}_{device_id}", [servers])
+            teardown_stream(f"{OUTPUT_TOPICS}_{device_id}", [servers])
         except Exception as e:
-            print(f"Topic {TOPICS}_{device_id} does not exist. Skipping...!")
+            print(f"Topic {OUTPUT_TOPICS}_{device_id} does not exist. Skipping...!")
 
     if mode == "setup":
         schemas_path = parsed_args["schemas_path"]

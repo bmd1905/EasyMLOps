@@ -12,11 +12,6 @@ make up-network
 make up-kafka
 ```
 
-<!-- ## Flink
-
-```
-make up-flink
-``` -->
 
 ## Test Flink
 
@@ -34,4 +29,10 @@ make producer_avro
 
 ```
 make consumer
+```
+
+### Deploy Kafka Connect S3 Sink Connector
+
+```
+python3 -m src.streaming.connectors.deploy_s3_connector
 ```

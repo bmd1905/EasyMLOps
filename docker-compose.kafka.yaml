@@ -175,8 +175,10 @@ services:
   kafka_producer:
     container_name: flink-kafka-producer
     build:
-      context: test/data_ingestion
-      dockerfile: kafka_producer/Dockerfile
+      context: src/producer
+      dockerfile: Dockerfile
+    env_file:
+      - src/producer/.env
     depends_on:
       broker:
         condition: service_healthy

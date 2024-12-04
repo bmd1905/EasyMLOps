@@ -13,11 +13,11 @@ from .processors.transformations.data_enricher import (
 
 JARS_PATH = f"{os.getcwd()}/src/streaming/connectors/config/jars/"
 
-
-TOPICS = "input-topic"
-GROUP_ID = "flink-group"
-OUTPUT_TOPIC = "output-topic"
-BOOTSTRAP_SERVERS = "localhost:9092"
+# Kafka configuration
+INPUT_TOPICS = os.getenv("KAFKA_INPUT_TOPICS", "raw-events-topic")
+GROUP_ID = os.getenv("KAFKA_GROUP_ID", "flink-group")
+OUTPUT_TOPIC = os.getenv("KAFKA_OUTPUT_TOPIC", "validated-events-topic")
+BOOTSTRAP_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
 
 
 def create_pipeline():
@@ -31,7 +31,7 @@ def create_pipeline():
 
     # Create source
     source = build_source(
-        topics=TOPICS,
+        topics=INPUT_TOPICS,
         group_id=GROUP_ID,
         bootstrap_servers=BOOTSTRAP_SERVERS,
     )
