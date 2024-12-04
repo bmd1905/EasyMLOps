@@ -95,7 +95,7 @@ def minio_etl():
             # Define multiple paths to check
             # current_time = datetime.now(tz=pendulum.timezone("UTC"))
 
-            path_prefix = "topics/output-topic/year=2024/month=11/day=27/hour=13/"
+            path_prefix = "topics/raw-events-topic/year=2024/month=11/day=27/hour=13/"
 
             all_data = []
             files_found = False
