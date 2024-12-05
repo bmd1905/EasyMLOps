@@ -25,4 +25,4 @@ volumes:
 
 networks:
   easydatapipeline_default:
-    external: true 
+    external: true

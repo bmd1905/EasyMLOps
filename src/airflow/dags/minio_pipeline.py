@@ -9,6 +9,7 @@ from airflow.decorators import dag, task
 from airflow.exceptions import AirflowException
 from airflow.models import Connection
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
+from airflow.providers.postgres.hooks.postgres import PostgresHook
 from airflow.utils.session import provide_session
 
 # Define default arguments
@@ -22,7 +23,6 @@ default_args = {
 }
 
 
-# Add this function to create the MinIO connection if it doesn't exist
 @provide_session
 def create_minio_conn(session=None):
     """Create MinIO connection if it doesn't exist"""
@@ -48,7 +48,38 @@ def create_minio_conn(session=None):
         session.commit()
 
 
-# Add this task to create bucket if it doesn't exist
+@provide_session
+def create_postgres_dwh_conn(session=None):
+    """Create PostgreSQL DWH connection if it doesn't exist"""
+    conn = (
+        session.query(Connection).filter(Connection.conn_id == "postgres_dwh").first()
+    )
+
+    if not conn:
+        conn = Connection(
+            conn_id="postgres_dwh",
+            conn_type="postgres",
+            host="postgres-dwh",
+            schema="dwh",
+            login="dwh",
+            password="dwh",
+            port=5432,
+        )
+        session.add(conn)
+        session.commit()
+
+
+@task()
+def check_postgres_connection() -> None:
+    """Check if PostgreSQL connection is working"""
+    try:
+        postgres_hook = PostgresHook(postgres_conn_id="postgres_dwh")
+        postgres_hook.get_conn()  # This will try to establish a connection
+        print("Successfully connected to PostgreSQL DWH")
+    except Exception as e:
+        raise AirflowException(f"Failed to connect to PostgreSQL DWH: {str(e)}")
+
+
 @task()
 def ensure_bucket_exists() -> None:
     """Ensure the required MinIO bucket exists"""
@@ -77,11 +108,15 @@ def minio_etl():
     This pipeline:
     1. Loads all JSON data from MinIO
     2. Transforms the data by adding processing metadata
-    3. Saves the processed data back to MinIO
+    3. Saves the processed data to PostgreSQL DWH
     """
 
-    # Create connection if it doesn't exist
+    # Create connections if they don't exist
     create_minio_conn()
+    create_postgres_dwh_conn()
+
+    # Check PostgreSQL connection
+    check_postgres_connection()
 
     # Ensure bucket exists before other tasks
     ensure_bucket_exists()
@@ -95,7 +130,10 @@ def minio_etl():
             # Define multiple paths to check
             # current_time = datetime.now(tz=pendulum.timezone("UTC"))
 
-            path_prefix = "topics/raw-events-topic/year=2024/month=11/day=27/hour=13/"
+            # path_prefix = "topics/raw-events-topic/year=2024/month=11/day=27/hour=13/"
+            path_prefix = (
+                "topics/validated-events-topic/year=2024/month=12/day=04/hour=15"
+            )
 
             all_data = []
             files_found = False
@@ -155,37 +193,54 @@ def minio_etl():
             raise AirflowException(f"Failed to transform data: {str(e)}")
 
     @task()
-    def save_to_minio(processed_data: dict) -> None:
-        """Save processed data back to MinIO"""
+    def save_to_postgres(processed_data: dict) -> None:
+        """Save the processed data to PostgreSQL DWH"""
         try:
-            # Initialize S3 Hook
-            s3_hook = S3Hook(aws_conn_id="minio_conn")
-
-            # Convert to DataFrame and then to JSON
+            postgres_hook = PostgresHook(postgres_conn_id="postgres_dwh")
+            
+            # Create schema if it doesn't exist
+            create_schema_sql = "CREATE SCHEMA IF NOT EXISTS dwh;"
+            postgres_hook.run(create_schema_sql)
+            
+            # Convert the processed data back to a DataFrame
             df = pd.DataFrame(processed_data["data"])
-            json_buffer = io.StringIO()
-            df.to_json(json_buffer, orient="records", lines=True)
-
-            # Generate output path with timestamp
-            output_path = (
-                f'processed/output_{datetime.now().strftime("%Y%m%d_%H%M%S")}.json'
+            
+            # Drop existing table and create new one with correct schema
+            drop_table_sql = """
+            DROP TABLE IF EXISTS dwh.processed_events;
+            """
+            postgres_hook.run(drop_table_sql)
+            
+            create_table_sql = """
+            CREATE TABLE dwh.processed_events (
+                device_id INTEGER,
+                created TEXT,
+                data TEXT,
+                processed_date TIMESTAMP,
+                processing_pipeline VARCHAR(255)
+            );
+            """
+            postgres_hook.run(create_table_sql)
+            
+            # Save the DataFrame to PostgreSQL
+            conn = postgres_hook.get_sqlalchemy_engine()
+            df.to_sql(
+                name='processed_events',
+                con=conn,
+                schema='dwh',
+                if_exists='append',
+                index=False
             )
-
-            # Upload to MinIO
-            s3_hook.load_string(
-                string_data=json_buffer.getvalue(),
-                key=output_path,
-                bucket_name="kafka",
-                replace=True,
-            )
-
+            
+            print(f"Successfully saved {len(df)} records to PostgreSQL")
+            
         except Exception as e:
-            raise AirflowException(f"Failed to save data to MinIO: {str(e)}")
+            raise AirflowException(f"Failed to save data to PostgreSQL: {str(e)}")
 
     # Define the task dependencies
     raw_data = load_from_minio()
     processed_data = transform_data(raw_data)
-    save_to_minio(processed_data)
+    save_to_postgres(processed_data)
 
 
 # Create DAG instance
