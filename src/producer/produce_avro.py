@@ -1,6 +1,7 @@
 import argparse
 import io
 import json
+import os
 from datetime import datetime
 from time import sleep
 
@@ -8,9 +9,16 @@ import avro
 import avro.io
 import avro.schema
 import numpy as np
+from dotenv import load_dotenv
 from kafka import KafkaAdminClient, KafkaProducer
 from kafka.admin import NewTopic
 from schema_registry.client import SchemaRegistryClient, schema
+
+load_dotenv()
+
+OUTPUT_TOPICS = os.getenv("KAFKA_OUTPUT_TOPICS", "raw-events-topic")
+BOOTSTRAP_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "broker:9092")
+SCHEMA_REGISTRY_SERVER = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "broker:9092")
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
@@ -23,19 +31,19 @@ parser.add_argument(
 parser.add_argument(
     "-b",
     "--bootstrap_servers",
-    default="localhost:9092",
+    default=BOOTSTRAP_SERVERS,
     help="Where the bootstrap server is",
 )
 parser.add_argument(
     "-s",
     "--schema_registry_server",
-    default="http://schema-registry:8081",
+    default=SCHEMA_REGISTRY_SERVER,
     help="Where to host schema",
 )
 parser.add_argument(
     "-c",
     "--avro_schemas_path",
-    default="./avro_schemas",
+    default=os.path.join(os.path.dirname(__file__), "avro_schemas"),
     help="Folder containing all generated avro schemas",
 )
 
@@ -60,6 +68,8 @@ def create_topic(admin, topic_name):
 def create_streams(servers, avro_schemas_path, schema_registry_client):
     producer = None
     admin = None
+
+    # Add retry logic for Kafka connection
     for _ in range(10):
         try:
             producer = KafkaProducer(bootstrap_servers=servers)
@@ -73,60 +83,81 @@ def create_streams(servers, avro_schemas_path, schema_registry_client):
             sleep(10)
             pass
 
-    while True:
-        record = {}
-        # Make event one more year recent to simulate fresher data
-        record["created"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        record["device_id"] = np.random.randint(low=0, high=NUM_DEVICES)
-
-        # Read columns from schema
-        avro_schema_path = f"{avro_schemas_path}/schema_{record['device_id']}.avsc"
-        with open(avro_schema_path, "r") as f:
-            parsed_avro_schema = json.loads(f.read())
-
-        for field in parsed_avro_schema["fields"]:
-            if field["name"] not in ["created", "device_id"]:
-                record[field["name"]] = np.random.rand()
-
-        # serialize the message data using the schema
-        avro_schema = avro.schema.Parse(open(avro_schema_path, "r").read())
-        writer = avro.io.DatumWriter(avro_schema)
-        bytes_writer = io.BytesIO()
-        # Write the Confluence "Magic Byte"
-        bytes_writer.write(bytes([0]))
-
-        # Get topic name for this device
-        topic_name = f'device_{record["device_id"]}'
-
-        # Check if schema exists in schema registry,
-        # if not, register one
-        schema_version_info = schema_registry_client.check_version(
-            f"{topic_name}-value", schema.AvroSchema(parsed_avro_schema)
-        )
-        if schema_version_info is not None:
-            schema_id = schema_version_info.schema_id
+    # Add retry logic for schema registry
+    for _ in range(10):
+        try:
+            # Test schema registry connection
+            schema_registry_client.get_subjects()
+            print("SUCCESS: connected to schema registry")
+            break
+        except Exception as e:
             print(
-                "Found an existing schema ID: {}. Skipping creation!".format(schema_id)
+                f"Failed to connect to schema registry: {e}. Retrying in 10 seconds..."
             )
-        else:
-            schema_id = schema_registry_client.register(
-                f"{topic_name}-value", schema.AvroSchema(parsed_avro_schema)
+            sleep(10)
+    else:
+        raise Exception("Failed to connect to schema registry after 10 attempts")
+
+    while True:
+        try:
+            record = {}
+            # Make event one more year recent to simulate fresher data
+            record["created"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            record["device_id"] = np.random.randint(low=0, high=NUM_DEVICES)
+
+            # Read columns from schema
+            avro_schema_path = f"{avro_schemas_path}/schema_{record['device_id']}.avsc"
+            with open(avro_schema_path, "r") as f:
+                parsed_avro_schema = json.loads(f.read())
+
+            for field in parsed_avro_schema["fields"]:
+                if field["name"] not in ["created", "device_id"]:
+                    record[field["name"]] = np.random.rand()
+
+            # serialize the message data using the schema
+            avro_schema = avro.schema.Parse(open(avro_schema_path, "r").read())
+            writer = avro.io.DatumWriter(avro_schema)
+            bytes_writer = io.BytesIO()
+            # Write the Confluence "Magic Byte"
+            bytes_writer.write(bytes([0]))
+
+            # Get topic name for this device
+            topic_name = OUTPUT_TOPICS
+
+            # Check if schema exists in schema registry,
+            # if not, register one
+            schema_version_info = schema_registry_client.check_version(
+                f"{topic_name}-schema", schema.AvroSchema(parsed_avro_schema)
             )
+            if schema_version_info is not None:
+                schema_id = schema_version_info.schema_id
+                print(
+                    "Found an existing schema ID: {}. Skipping creation!".format(
+                        schema_id
+                    )
+                )
+            else:
+                schema_id = schema_registry_client.register(
+                    f"{topic_name}-schema", schema.AvroSchema(parsed_avro_schema)
+                )
 
-        # Write schema ID
-        bytes_writer.write(int.to_bytes(schema_id, 4, byteorder="big"))
+            # Write schema ID
+            bytes_writer.write(int.to_bytes(schema_id, 4, byteorder="big"))
 
-        # Write data
-        encoder = avro.io.BinaryEncoder(bytes_writer)
-        writer.write(record, encoder)
+            # Write data
+            encoder = avro.io.BinaryEncoder(bytes_writer)
+            writer.write(record, encoder)
 
-        # Create a new topic for this device id if not exists
-        create_topic(admin, topic_name=topic_name)
+            # Create a new topic for this device id if not exists
+            create_topic(admin, topic_name=topic_name)
 
-        # Send messages to this topic
-        producer.send(topic_name, value=bytes_writer.getvalue(), key=None)
-        print(record)
-        sleep(10)
+            # Send messages to this topic
+            producer.send(topic_name, value=bytes_writer.getvalue(), key=None)
+            print(record)
+            sleep(10)
+        except Exception as e:
+            print(f"Error creating stream: {e}. Retrying in 10 seconds...")
+            sleep(10)
 
 
 def teardown_stream(topic_name, servers=["localhost:9092"]):
@@ -149,7 +180,7 @@ if __name__ == "__main__":
     print("Tearing down all existing topics!")
     for device_id in range(NUM_DEVICES):
         try:
-            teardown_stream(f"device_{device_id}", [servers])
+            teardown_stream(OUTPUT_TOPICS, [servers])
         except Exception as e:
             print(f"Topic device_{device_id} does not exist. Skipping...!")
 

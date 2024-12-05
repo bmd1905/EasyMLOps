@@ -12,7 +12,6 @@ from kafka.admin import NewTopic
 
 load_dotenv()
 
-GROUP_ID = os.getenv("KAFKA_GROUP_ID", "flink-group")
 OUTPUT_TOPICS = os.getenv("KAFKA_OUTPUT_TOPICS", "raw-events-topic")
 BOOTSTRAP_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "broker:9092")
 

@@ -76,6 +76,15 @@ clean:
 	docker compose -f $(DWH_COMPOSE_FILE) down -v
 	docker system prune -f
 
+view-topics:
+	docker compose -f $(KAFKA_COMPOSE_FILE) exec -it broker kafka-topics --list --bootstrap-server broker:9092
+
+view-schemas:
+	docker compose -f $(KAFKA_COMPOSE_FILE) exec -it schema-registry curl -X GET "http://localhost:8081/subjects"
+
+view-consumer-groups:
+	docker compose -f $(KAFKA_COMPOSE_FILE) exec -it broker kafka-consumer-groups --bootstrap-server broker:9092 --list
+
 # Help Command
 help:
 	@echo "Available commands:"
