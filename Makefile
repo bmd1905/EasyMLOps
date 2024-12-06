@@ -10,13 +10,13 @@ PYTHON := python3
 
 # Data Ingestion and Streaming Tests
 producer_json:
-	$(PYTHON) test/data_ingestion/kafka_producer/produce_json.py
+	$(PYTHON) src/producer/produce_json.py
 
 producer_avro:
-	$(PYTHON) test/data_ingestion/kafka_producer/produce_avro.py --schema_registry_server=http://localhost:8081
+	$(PYTHON) src/producer/produce_avro.py -b=localhost:9092 -s=http://localhost:8081
 
 consumer:
-	$(PYTHON) -m src.streaming.main
+	$(PYTHON) -m src.streaming.main feature_enrichment
 
 # Docker Compose Commands
 up-network:

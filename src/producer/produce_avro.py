@@ -18,7 +18,7 @@ load_dotenv()
 
 OUTPUT_TOPICS = os.getenv("KAFKA_OUTPUT_TOPICS", "raw-events-topic")
 BOOTSTRAP_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "broker:9092")
-SCHEMA_REGISTRY_SERVER = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "broker:9092")
+SCHEMA_REGISTRY_SERVER = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "schema-registry:8081")
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
