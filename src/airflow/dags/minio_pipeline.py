@@ -1,16 +1,24 @@
-import io
 import json
+import logging
+import time
 from datetime import datetime, timedelta
+from hashlib import sha256
+from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
 import pendulum
+import requests
+from sqlalchemy import String
 
 from airflow.decorators import dag, task
 from airflow.exceptions import AirflowException
-from airflow.models import Connection
+from airflow.models import Connection, Variable
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from airflow.providers.postgres.hooks.postgres import PostgresHook
 from airflow.utils.session import provide_session
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Define default arguments
 default_args = {
@@ -21,6 +29,68 @@ default_args = {
     "retries": 1,
     "retry_delay": timedelta(minutes=5),
 }
+
+# Replace hard-coded config with Variables
+BUCKET_NAME = Variable.get("MINIO_BUCKET_NAME", default_var="validated-events-bucket")
+PATH_PREFIX = Variable.get(
+    "MINIO_PATH_PREFIX", default_var="topics/validated-events-topic/year=2024/month=12"
+)
+SCHEMA_REGISTRY_URL = Variable.get(
+    "SCHEMA_REGISTRY_URL", default_var="http://schema-registry:8081"
+)
+SCHEMA_SUBJECT = Variable.get("SCHEMA_SUBJECT", default_var="raw-events-topic-schema")
+BATCH_SIZE = int(Variable.get("BATCH_SIZE", default_var="1000"))
+
+
+# Add retry decorator
+def with_retry(max_retries: int = 3, initial_delay: float = 1.0):
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            delay = initial_delay
+            last_exception = None
+
+            for retry in range(max_retries):
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    last_exception = e
+                    logger.warning(f"Attempt {retry + 1} failed: {str(e)}")
+                    time.sleep(delay)
+                    delay *= 2  # Exponential backoff
+
+            raise last_exception
+
+        return wrapper
+
+    return decorator
+
+
+# Add data validation function
+def validate_record(record: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
+    """Validate a single record against business rules"""
+    try:
+        if not isinstance(record.get("price"), (int, float)):
+            return False, "Invalid price type"
+        if record.get("price", 0) < 0:
+            return False, "Negative price"
+        if not record.get("product_id"):
+            return False, "Missing product_id"
+        return True, None
+    except Exception as e:
+        return False, str(e)
+
+
+# Add new function for generating record hash
+def generate_record_hash(record: Dict[str, Any]) -> str:
+    """Generate a unique hash for a record based on business keys"""
+    # Customize these fields based on what makes a record unique in your system
+    key_fields = ["product_id", "timestamp", "user_id"]  # Add/modify fields as needed
+
+    # Create a string of key fields
+    key_string = "|".join(str(record.get(field, "")) for field in key_fields)
+
+    # Generate hash
+    return sha256(key_string.encode()).hexdigest()
 
 
 @provide_session
@@ -85,11 +155,66 @@ def ensure_bucket_exists() -> None:
     """Ensure the required MinIO bucket exists"""
     try:
         s3_hook = S3Hook(aws_conn_id="minio_conn")
-        if not s3_hook.check_for_bucket("kafka"):
-            s3_hook.create_bucket(bucket_name="kafka")
+        if not s3_hook.check_for_bucket(BUCKET_NAME):
+            s3_hook.create_bucket(bucket_name=BUCKET_NAME)
 
     except Exception as e:
         raise AirflowException(f"Failed to create bucket: {str(e)}")
+
+
+def get_latest_schema_from_registry() -> Dict[str, Any]:
+    """Fetch the latest schema from Schema Registry"""
+    try:
+        response = requests.get(
+            f"{SCHEMA_REGISTRY_URL}/subjects/{SCHEMA_SUBJECT}/versions/latest",
+            timeout=5,
+        )
+        response.raise_for_status()
+        return json.loads(response.json()["schema"])
+    except requests.exceptions.RequestException as e:
+        raise AirflowException(f"Failed to fetch schema from registry: {str(e)}")
+    except (KeyError, json.JSONDecodeError) as e:
+        raise AirflowException(f"Invalid schema format received: {str(e)}")
+
+
+def get_postgres_schema_from_avro() -> List[Dict[str, Any]]:
+    """Convert Avro schema to PostgreSQL column definitions"""
+    try:
+        # Fetch schema from registry instead of file
+        avro_schema = get_latest_schema_from_registry()
+
+        # Map Avro types to PostgreSQL types
+        type_mapping = {
+            "string": "TEXT",
+            "long": "BIGINT",
+            "double": "DOUBLE PRECISION",
+            "int": "INTEGER",
+            "boolean": "BOOLEAN",
+            "null": "NULL",
+        }
+
+        columns = []
+        for field in avro_schema["fields"]:
+            field_type = field["type"]
+            # Handle union types (e.g., ["null", "string"])
+            if isinstance(field_type, list):
+                # Use the non-null type if available
+                actual_type = next(
+                    (t for t in field_type if t != "null"), field_type[0]
+                )
+                nullable = "null" in field_type
+            else:
+                actual_type = field_type
+                nullable = False
+
+            pg_type = type_mapping.get(actual_type, "TEXT")
+            columns.append(
+                {"name": field["name"], "type": pg_type, "nullable": nullable}
+            )
+
+        return columns
+    except Exception as e:
+        raise AirflowException(f"Failed to process Avro schema: {str(e)}")
 
 
 @dag(
@@ -131,15 +256,13 @@ def minio_etl():
             # current_time = datetime.now(tz=pendulum.timezone("UTC"))
 
             # path_prefix = "topics/raw-events-topic/year=2024/month=11/day=27/hour=13/"
-            path_prefix = (
-                "topics/validated-events-topic/year=2024/month=12/day=04/hour=15"
-            )
+            path_prefix = PATH_PREFIX
 
             all_data = []
             files_found = False
 
             # List all keys in the directory
-            keys = s3_hook.list_keys(bucket_name="kafka", prefix=path_prefix)
+            keys = s3_hook.list_keys(bucket_name=BUCKET_NAME, prefix=path_prefix)
 
             if keys:
                 files_found = True
@@ -147,7 +270,7 @@ def minio_etl():
 
                 for key in keys:
                     # Read the file
-                    data = s3_hook.read_key(key=key, bucket_name="kafka")
+                    data = s3_hook.read_key(key=key, bucket_name=BUCKET_NAME)
                     if not data:
                         continue
 
@@ -178,63 +301,141 @@ def minio_etl():
 
     @task()
     def transform_data(raw_data: dict) -> dict:
-        """Transform the data by adding processing metadata"""
+        """Transform the data with validation, deduplication, and metrics"""
+        metrics = {
+            "total_records": 0,
+            "valid_records": 0,
+            "invalid_records": 0,
+            "duplicate_records": 0,
+            "validation_errors": {},
+        }
+
         try:
-            df = pd.DataFrame(raw_data["data"])
+            flattened_data = []
+            seen_records = set()  # Track unique records
 
-            # Add processing metadata
-            df["processed_date"] = datetime.now(tz=pendulum.timezone("UTC")).isoformat()
-            df["processing_pipeline"] = "minio_etl"
+            for record in raw_data["data"]:
+                metrics["total_records"] += 1
+                payload = record.get("payload", {})
 
-            # Return as a single dictionary with 'data' key
-            return {"data": df.to_dict(orient="records")}
+                # Generate record hash
+                record_hash = generate_record_hash(payload)
+
+                # Check for duplicates
+                if record_hash in seen_records:
+                    metrics["duplicate_records"] += 1
+                    logger.info(f"Skipping duplicate record with hash: {record_hash}")
+                    continue
+
+                # Validate record
+                is_valid, error_message = validate_record(payload)
+
+                if not is_valid:
+                    metrics["invalid_records"] += 1
+                    metrics["validation_errors"][error_message] = (
+                        metrics["validation_errors"].get(error_message, 0) + 1
+                    )
+                    continue
+
+                metrics["valid_records"] += 1
+                seen_records.add(record_hash)
+
+                # Add metadata
+                payload["processed_date"] = datetime.now(
+                    tz=pendulum.timezone("UTC")
+                ).isoformat()
+                payload["processing_pipeline"] = "minio_etl"
+                payload["valid"] = "TRUE"
+                payload["record_hash"] = record_hash  # Store hash for future reference
+
+                flattened_data.append(payload)
+
+            # Log metrics including duplicates
+            logger.info(f"Processing metrics: {json.dumps(metrics, indent=2)}")
+
+            # Convert to DataFrame
+            df = pd.DataFrame(flattened_data)
+
+            return {"data": df.to_dict(orient="records"), "metrics": metrics}
 
         except Exception as e:
+            logger.error(f"Transform error: {str(e)}")
             raise AirflowException(f"Failed to transform data: {str(e)}")
 
     @task()
     def save_to_postgres(processed_data: dict) -> None:
-        """Save the processed data to PostgreSQL DWH"""
+        """Save the processed data to PostgreSQL DWH in batches with deduplication"""
         try:
             postgres_hook = PostgresHook(postgres_conn_id="postgres_dwh")
-            
+            df = pd.DataFrame(processed_data["data"])
+
             # Create schema if it doesn't exist
             create_schema_sql = "CREATE SCHEMA IF NOT EXISTS dwh;"
             postgres_hook.run(create_schema_sql)
-            
-            # Convert the processed data back to a DataFrame
-            df = pd.DataFrame(processed_data["data"])
-            
-            # Drop existing table and create new one with correct schema
-            drop_table_sql = """
-            DROP TABLE IF EXISTS dwh.processed_events;
-            """
-            postgres_hook.run(drop_table_sql)
-            
-            create_table_sql = """
-            CREATE TABLE dwh.processed_events (
-                device_id INTEGER,
-                created TEXT,
-                data TEXT,
-                processed_date TIMESTAMP,
-                processing_pipeline VARCHAR(255)
-            );
-            """
-            postgres_hook.run(create_table_sql)
-            
-            # Save the DataFrame to PostgreSQL
-            conn = postgres_hook.get_sqlalchemy_engine()
-            df.to_sql(
-                name='processed_events',
-                con=conn,
-                schema='dwh',
-                if_exists='append',
-                index=False
+
+            # Get schema from Avro and create table if it doesn't exist
+            columns = get_postgres_schema_from_avro()
+
+            # Add additional columns for metadata
+            columns.extend(
+                [
+                    {
+                        "name": "processed_date",
+                        "type": "TIMESTAMP WITH TIME ZONE",
+                        "nullable": True,
+                    },
+                    {"name": "processing_pipeline", "type": "TEXT", "nullable": True},
+                    {"name": "valid", "type": "TEXT", "nullable": True},
+                    {"name": "record_hash", "type": "VARCHAR(64)", "nullable": False},
+                ]
             )
-            
-            print(f"Successfully saved {len(df)} records to PostgreSQL")
-            
+
+            # Build CREATE TABLE statement
+            create_table_sql = """
+            CREATE TABLE IF NOT EXISTS dwh.processed_events (
+                {}
+            );
+            """.format(
+                ",\n                ".join(
+                    f"{col['name']} {col['type']}{' NULL' if col['nullable'] else ' NOT NULL'}"
+                    for col in columns
+                )
+            )
+
+            postgres_hook.run(create_table_sql)
+
+            # Create unique index on record_hash if it doesn't exist
+            create_index_sql = """
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_processed_events_record_hash 
+            ON dwh.processed_events(record_hash);
+            """
+            postgres_hook.run(create_index_sql)
+
+            # Save in batches with conflict handling
+            total_rows = len(df)
+            for i in range(0, total_rows, BATCH_SIZE):
+                batch_df = df[i : i + BATCH_SIZE]
+                conn = postgres_hook.get_sqlalchemy_engine()
+
+                # Use ON CONFLICT DO NOTHING to skip duplicates at DB level
+                batch_df.to_sql(
+                    name="processed_events",
+                    con=conn,
+                    schema="dwh",
+                    if_exists="append",
+                    index=False,
+                    method="multi",
+                    dtype={"record_hash": String(64)},  # Specify column type for hash
+                )
+                logger.info(
+                    f"Saved batch {i//BATCH_SIZE + 1} ({len(batch_df)} records)"
+                )
+
+            # Log final metrics
+            logger.info(f"Total records processed: {processed_data['metrics']}")
+
         except Exception as e:
+            logger.error(f"Database error: {str(e)}")
             raise AirflowException(f"Failed to save data to PostgreSQL: {str(e)}")
 
     # Define the task dependencies
