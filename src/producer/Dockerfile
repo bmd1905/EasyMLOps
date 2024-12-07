@@ -7,6 +7,7 @@ COPY ./produce.py /app/produce.py
 
 # Copy the schema folder
 COPY ./avro_schemas /app/avro_schemas
+COPY ./data/sample.parquet /app/data/sample.parquet
 
 # Install dependencies
 RUN pip3 install kafka-python==2.0.2
