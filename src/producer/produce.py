@@ -1,12 +1,8 @@
 import argparse
-import io
 import json
 import os
 from time import sleep
 
-import avro
-import avro.io
-import avro.schema
 import pandas as pd
 from dotenv import load_dotenv
 from kafka import KafkaAdminClient, KafkaProducer
@@ -73,7 +69,10 @@ def create_streams(servers, avro_schemas_path, schema_registry_client):
     # Add retry logic for Kafka connection
     for _ in range(10):
         try:
-            producer = KafkaProducer(bootstrap_servers=servers)
+            producer = KafkaProducer(
+                bootstrap_servers=servers,
+                value_serializer=str.encode  # Simple string encoding
+            )
             admin = KafkaAdminClient(bootstrap_servers=servers)
             print("SUCCESS: instantiated Kafka admin and producer")
             break
@@ -130,40 +129,40 @@ def create_streams(servers, avro_schemas_path, schema_registry_client):
     # Create topic if not exists
     create_topic(admin, topic_name=topic_name)
 
-    # Process each record
-    avro_schema = avro.schema.Parse(json.dumps(parsed_avro_schema))
-    writer = avro.io.DatumWriter(avro_schema)
-
-    for _, row in df.iterrows():
+    for index, row in df.iterrows():
         try:
             # Prepare record
             record = {
-                "event_time": str(row["event_time"]),  # Convert to string
+                "event_time": str(row["event_time"]),
                 "event_type": str(row["event_type"]),
-                "product_id": int(row["product_id"]),  # Ensure long type
-                "category_id": int(row["category_id"]),  # Ensure long type
+                "product_id": int(row["product_id"]),
+                "category_id": int(row["category_id"]),
                 "category_code": str(row["category_code"])
                 if pd.notnull(row["category_code"])
                 else None,
                 "brand": str(row["brand"]) if pd.notnull(row["brand"]) else None,
-                "price": float(row["price"]),  # Ensure double type
-                "user_id": int(row["user_id"]),  # Ensure long type
+                "price": float(row["price"]),
+                "user_id": int(row["user_id"]),
                 "user_session": str(row["user_session"]),
             }
 
-            # Serialize record
-            bytes_writer = io.BytesIO()
-            bytes_writer.write(bytes([0]))  # Magic byte
-            bytes_writer.write(int.to_bytes(schema_id, 4, byteorder="big"))  # Schema ID
+            # Fake invalid record
+            if index % 20 == 0:
+                record["price"] = "invalid"
 
-            # Write data
-            encoder = avro.io.BinaryEncoder(bytes_writer)
-            writer.write(record, encoder)
+            # Create the record including schema, and data
+            formatted_record = {
+                "schema": {"type": "struct", "fields": parsed_avro_schema["fields"]},
+                "payload": record,
+            }
 
-            # Send to Kafka
-            producer.send(topic_name, value=bytes_writer.getvalue(), key=None)
-            print(f"Sent record: {record}")
-            sleep(2)  # Small delay between messages
+            # Convert to JSON string before sending
+            json_str = json.dumps(formatted_record)
+            
+            # Send JSON string directly to Kafka
+            producer.send(topic_name, value=json_str)  # Remove the key parameter if not needed
+            print(f"Sent record: {json_str}")
+            sleep(0.1)  # Small delay between messages
 
         except Exception as e:
             print(f"Error processing record: {e}")

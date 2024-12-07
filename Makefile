@@ -9,14 +9,14 @@ DWH_COMPOSE_FILE := docker-compose.dwh.yaml
 PYTHON := python3
 
 # Data Ingestion and Streaming Tests
-producer_json:
-	$(PYTHON) src/producer/produce_json.py
-
-producer_avro:
-	$(PYTHON) src/producer/produce_avro.py -b=localhost:9092 -s=http://localhost:8081
+producer:
+	$(PYTHON) src/producer/produce.py -b=localhost:9092 -s=http://localhost:8081
 
 consumer:
-	$(PYTHON) -m src.streaming.main feature_enrichment
+	$(PYTHON) -m src.streaming.main schema_validation
+
+deploy_s3_connector:
+	$(PYTHON) -m src.streaming.connectors.deploy_s3_connector
 
 # Docker Compose Commands
 up-network:
