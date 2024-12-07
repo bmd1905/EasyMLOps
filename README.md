@@ -12,6 +12,11 @@ make up-network
 make up-kafka
 ```
 
+## Setup Connectors
+
+```
+make deploy_s3_connector
+```
 
 ## Test Flink
 

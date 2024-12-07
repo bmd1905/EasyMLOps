@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Union
 
 from pyflink.common import WatermarkStrategy
+from pyflink.common.typeinfo import Types
 from pyflink.datastream import StreamExecutionEnvironment
 
 from ..connectors.sinks.kafka_sink import build_sink
@@ -104,26 +105,18 @@ def validate_schema(record: str) -> dict:
             - bool: True if record is valid, False otherwise
             - dict | None: The invalid record if validation fails, None if valid
     """
-    try:
-        # Convert string to dict if needed
-        record_dict = json.loads(record) if isinstance(record, str) else record
+    # Convert string to dict if needed
+    record_dict = json.loads(record)  # if isinstance(record, str) else record
 
-        payload = record_dict["payload"]
-        schema = record_dict["schema"]
+    payload = record_dict["payload"]
+    schema = record_dict["schema"]
 
-        # Validate schema against payload
-        valid = validate_schema_against_payload(schema, payload)
-        record_dict["valid"] = valid
-        print("Schema validation result: ", valid)
+    # Validate schema against payload
+    valid = validate_schema_against_payload(schema, payload)
+    record_dict["valid"] = "VALID" if valid else "INVALID"
+    print("Schema validation result: ", valid)
 
-        return record_dict
-
-    except (json.JSONDecodeError, KeyError) as e:
-        # For parsing errors, return the original record if possible
-        return {
-            "valid": False,
-            "raw_record": record_dict if isinstance(record, dict) else record,
-        }
+    return json.dumps(record_dict)
 
 
 class SchemaValidationJob(FlinkJob):
@@ -172,8 +165,8 @@ class SchemaValidationJob(FlinkJob):
         )
 
         # Process stream and get valid and invalid streams
-        validated_stream = stream.map(validate_schema)
+        validated_stream = stream.map(validate_schema, output_type=Types.STRING())
 
-        # Sink streams to respective topics
-        validated_stream.filter(lambda x: not x["valid"]).sink_to(sink=invalid_sink)
-        validated_stream.filter(lambda x: x["valid"]).sink_to(sink=valid_sink)
+        # # Sink streams to respective topics
+        validated_stream.filter(lambda x: "INVALID" in x).sink_to(sink=invalid_sink)
+        validated_stream.filter(lambda x: "VALID" in x).sink_to(sink=valid_sink)

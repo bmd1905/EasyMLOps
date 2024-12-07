@@ -147,7 +147,7 @@ def create_streams(servers, avro_schemas_path, schema_registry_client):
             }
 
             # Fake invalid record
-            if index % 20 == 0:
+            if index % 10 == 0:
                 record["price"] = "invalid"
 
             # Create the record including schema, and data
@@ -160,9 +160,9 @@ def create_streams(servers, avro_schemas_path, schema_registry_client):
             json_str = json.dumps(formatted_record)
             
             # Send JSON string directly to Kafka
-            producer.send(topic_name, value=json_str)  # Remove the key parameter if not needed
-            print(f"Sent record: {json_str}")
-            sleep(0.1)  # Small delay between messages
+            producer.send(topic_name, value=json_str)
+            print(f"Sent record: {index}")
+            sleep(0.5)  # Small delay between messages
 
         except Exception as e:
             print(f"Error processing record: {e}")
