@@ -221,7 +221,7 @@ def get_postgres_schema_from_avro() -> List[Dict[str, Any]]:
     dag_id="minio_data_pipeline",
     default_args=default_args,
     description="A simple pipeline to process data from MinIO",
-    schedule="@daily",
+    schedule="@hourly",
     start_date=pendulum.datetime(2024, 1, 1, tz="UTC"),
     catchup=False,
     tags=["minio", "etl"],
