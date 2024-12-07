@@ -21,7 +21,7 @@ services:
 
 volumes:
   minio_data:
-    driver: local 
+    driver: local
 
 networks:
   easydatapipeline_default:

@@ -29,8 +29,6 @@ def merge_features(record):
                 ],
             },
             "payload": {
-                "device_id": record["payload"]["device_id"],
-                "created": record["payload"]["created"],
                 "data": json.dumps(data),
             },
         }

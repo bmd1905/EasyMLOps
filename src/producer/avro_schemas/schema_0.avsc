@@ -1,0 +1,44 @@
+{
+  "doc": "Sample schema to help you get started.",
+  "fields": [
+    {
+      "name": "device_id",
+      "type": "int"
+    },
+    {
+      "name": "created",
+      "type": "string"
+    },
+    {
+      "name": "feature_5",
+      "type": "float"
+    },
+    {
+      "name": "feature_3",
+      "type": "float"
+    },
+    {
+      "name": "feature_1",
+      "type": "float"
+    },
+    {
+      "name": "feature_8",
+      "type": "float"
+    },
+    {
+      "name": "feature_6",
+      "type": "float"
+    },
+    {
+      "name": "feature_0",
+      "type": "float"
+    },
+    {
+      "name": "feature_4",
+      "type": "float"
+    }
+  ],
+  "name": "Device",
+  "namespace": "example.avro",
+  "type": "record"
+}

@@ -3,9 +3,9 @@
     "config": {
         "connector.class": "io.confluent.connect.s3.S3SinkConnector",
         "tasks.max": "1",
-        "topics": "output-topic",
+        "topics": "validated-events-topic",
         "store.url": "http://minio:9000",
-        "s3.bucket.name": "kafka-bucket",
+        "s3.bucket.name": "validated-events-bucket",
         "s3.region": "ap-southeast-1",
         "s3.access.key.id": "${MINIO_ROOT_USER}",
         "s3.secret.access.key": "${MINIO_ROOT_PASSWORD}",
@@ -18,6 +18,10 @@
         "timezone": "UTC",
         "flush.size": "1",
         "aws.access.key.id": "${MINIO_ROOT_USER}",
-        "aws.secret.access.key": "${MINIO_ROOT_PASSWORD}"
+        "aws.secret.access.key": "${MINIO_ROOT_PASSWORD}",
+        "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+        "value.converter.schemas.enable": false,
+        "key.converter": "org.apache.kafka.connect.json.JsonConverter",
+        "key.converter.schemas.enable": false
     }
 }

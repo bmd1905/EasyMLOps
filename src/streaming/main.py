@@ -1,56 +1,40 @@
-import os
+import argparse
+from typing import Dict, Type
 
-from pyflink.common import WatermarkStrategy
-from pyflink.common.typeinfo import Types
+from dotenv import find_dotenv, load_dotenv
 from pyflink.datastream import StreamExecutionEnvironment
 
-from .connectors.sinks.kafka_sink import build_sink
-from .connectors.sources.kafka_source import build_source
-from .processors.transformations.data_enricher import (
-    filter_small_features,
-    merge_features,
-)
+from .jobs.base import FlinkJob
+from .jobs.schema_validation_job import SchemaValidationJob
 
-JARS_PATH = f"{os.getcwd()}/src/streaming/connectors/config/jars/"
+load_dotenv(find_dotenv())
 
 
-TOPICS = "input-topic"
-GROUP_ID = "flink-group"
-OUTPUT_TOPIC = "output-topic"
-BOOTSTRAP_SERVERS = "localhost:9092"
+def get_available_jobs() -> Dict[str, Type[FlinkJob]]:
+    """Return a dictionary of available jobs"""
+    return {
+        "schema_validation": SchemaValidationJob,
+    }
 
 
-def create_pipeline():
+def main():
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description="Run a Flink job")
+    parser.add_argument(
+        "job_name", choices=get_available_jobs().keys(), help="Name of the job to run"
+    )
+    args = parser.parse_args()
+
+    # Get the job class and create an instance
+    job_class = get_available_jobs()[args.job_name]
+    job = job_class()
+
+    # Create and execute the pipeline
     env = StreamExecutionEnvironment.get_execution_environment()
-
-    # The other commented lines are for Avro format
-    env.add_jars(
-        f"file://{JARS_PATH}/flink-connector-kafka-1.17.1.jar",
-        f"file://{JARS_PATH}/kafka-clients-3.4.0.jar",
-    )
-
-    # Create source
-    source = build_source(
-        topics=TOPICS,
-        group_id=GROUP_ID,
-        bootstrap_servers=BOOTSTRAP_SERVERS,
-    )
-
-    # Create sink
-    sink = build_sink(
-        topic=OUTPUT_TOPIC,
-        bootstrap_servers=BOOTSTRAP_SERVERS,
-    )
-
-    # Build pipeline
-    env.from_source(source, WatermarkStrategy.no_watermarks(), "Kafka Source").filter(
-        filter_small_features
-    ).map(merge_features, output_type=Types.STRING()).sink_to(sink=sink)
-
-    return env
+    job.create_pipeline(env)
+    env.execute(f"{job.job_name} Pipeline")
+    print(f"Job {job.job_name} has been started successfully!")
 
 
 if __name__ == "__main__":
-    env = create_pipeline()
-    env.execute("Streaming Pipeline")
-    print("Your job has been started successfully!")
+    main()
