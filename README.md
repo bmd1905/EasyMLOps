@@ -1,5 +1,7 @@
 # Easy Data Pipeline
 
+![Easy Data Pipeline Architecture](./docs/pipeline.png)
+
 ## Start Network
 
 ```
