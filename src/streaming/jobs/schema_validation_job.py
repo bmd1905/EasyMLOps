@@ -54,6 +54,26 @@ def validate_field_type(
     return isinstance(field_value, expected_types)
 
 
+def validate_field_value(
+    field_value: Any, field_type: Union[str, List[str]], field_name: str
+) -> bool:
+    """
+    Validate a single field's value against the expected schema value.
+    """
+    # price should be greater than 0
+    if field_name == "price":
+        return field_value > 0, "Price should be greater than 0"
+
+    # event type should be one of the following: "view", "cart", "purchase", "remove_from_cart"
+    if field_name == "event_type":
+        return (
+            field_value in ["view", "cart", "purchase", "remove_from_cart"],
+            "Event type should be one of the following: view, cart, purchase, remove_from_cart",
+        )
+
+    return True, None
+
+
 def validate_schema_against_payload(schema: Dict, payload: Dict) -> bool:
     """
     Validate the schema against the payload.
@@ -66,13 +86,25 @@ def validate_schema_against_payload(schema: Dict, payload: Dict) -> bool:
         bool: True if payload matches schema, False otherwise
     """
     if not isinstance(schema, dict) or not isinstance(payload, dict):
-        return False
+        return (
+            False,
+            "Schema and payload must be dictionaries",
+            "SCHEMA_VALIDATION_ERROR",
+        )
 
     if "type" not in schema or schema["type"] != "struct":
-        return False
+        return (
+            False,
+            "Schema must be a dictionary with a 'type' key set to 'struct'",
+            "SCHEMA_VALIDATION_ERROR",
+        )
 
     if "fields" not in schema:
-        return False
+        return (
+            False,
+            "Schema must contain a 'fields' key",
+            "SCHEMA_VALIDATION_ERROR",
+        )
 
     # Check all required fields are present and have correct types
     for field in schema["fields"]:
@@ -84,13 +116,28 @@ def validate_schema_against_payload(schema: Dict, payload: Dict) -> bool:
             # If field has a default value, it's optional
             if "default" in field:
                 continue
-            return False
+            return (
+                False,
+                f"Field {field_name} is required",
+                "SCHEMA_VALIDATION_ERROR",
+            )
 
         # Validate the field's type
         if not validate_field_type(payload[field_name], field_type, field_name):
-            return False
+            return (
+                False,
+                f"Field {field_name} has invalid type",
+                "SCHEMA_VALIDATION_ERROR",
+            )
 
-    return True
+        # Validate the field's value
+        valid, error_message = validate_field_value(
+            payload[field_name], field_type, field_name
+        )
+        if not valid:
+            return False, error_message, "SCHEMA_VALIDATION_ERROR"
+
+    return True, None, None
 
 
 def validate_schema(record: str) -> dict:
@@ -112,8 +159,10 @@ def validate_schema(record: str) -> dict:
     schema = record_dict["schema"]
 
     # Validate schema against payload
-    valid = validate_schema_against_payload(schema, payload)
+    valid, error_message, error_type = validate_schema_against_payload(schema, payload)
     record_dict["valid"] = "VALID" if valid else "INVALID"
+    record_dict["error_message"] = error_message
+    record_dict["error_type"] = error_type
     print("Schema validation result: ", valid)
 
     return json.dumps(record_dict)

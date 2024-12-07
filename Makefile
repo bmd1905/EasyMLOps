@@ -18,6 +18,10 @@ consumer:
 deploy_s3_connector:
 	$(PYTHON) -m src.streaming.connectors.deploy_s3_connector
 
+alert_invalid_events:
+	$(PYTHON) -m src.streaming.main alert_invalid_events
+
+
 # Docker Compose Commands
 up-network:
 	docker network create easydatapipeline_default
