@@ -1,6 +1,5 @@
 import json
 import logging
-import time
 from datetime import timedelta
 from typing import Any, Dict, List
 
@@ -12,10 +11,9 @@ from utils.transform_utils import enrich_record, generate_record_hash, validate_
 
 from airflow.decorators import dag, task
 from airflow.exceptions import AirflowException
-from airflow.models import Connection, Variable
+from airflow.models import Variable
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from airflow.providers.postgres.hooks.postgres import PostgresHook
-from airflow.utils.session import provide_session
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -40,52 +38,6 @@ SCHEMA_REGISTRY_URL = Variable.get(
 )
 SCHEMA_SUBJECT = Variable.get("SCHEMA_SUBJECT", default_var="raw-events-topic-schema")
 BATCH_SIZE = int(Variable.get("BATCH_SIZE", default_var="1000"))
-
-
-@provide_session
-def create_minio_conn(session=None):
-    """Create MinIO connection if it doesn't exist"""
-    conn = session.query(Connection).filter(Connection.conn_id == "minio_conn").first()
-
-    if not conn:
-        conn = Connection(
-            conn_id="minio_conn",
-            conn_type="s3",
-            host="minio",
-            port=9000,
-            login="minioadmin",
-            password="minioadmin",
-            extra={
-                "aws_access_key_id": "minioadmin",
-                "aws_secret_access_key": "minioadmin",
-                "endpoint_url": "http://minio:9000",
-                "region_name": "ap-southeast-1",
-                "verify": False,
-            },
-        )
-        session.add(conn)
-        session.commit()
-
-
-@provide_session
-def create_postgres_dwh_conn(session=None):
-    """Create PostgreSQL DWH connection if it doesn't exist"""
-    conn = (
-        session.query(Connection).filter(Connection.conn_id == "postgres_dwh").first()
-    )
-
-    if not conn:
-        conn = Connection(
-            conn_id="postgres_dwh",
-            conn_type="postgres",
-            host="postgres-dwh",
-            schema="dwh",
-            login="dwh",
-            password="dwh",
-            port=5432,
-        )
-        session.add(conn)
-        session.commit()
 
 
 @task()
@@ -185,14 +137,7 @@ def minio_etl():
     3. Saves the processed data to PostgreSQL DWH
     """
 
-    # Create connections if they don't exist
-    create_minio_conn()
-    create_postgres_dwh_conn()
-
-    # Check PostgreSQL connection
     check_postgres_connection()
-
-    # Ensure bucket exists before other tasks
     ensure_bucket_exists()
 
     @task()
