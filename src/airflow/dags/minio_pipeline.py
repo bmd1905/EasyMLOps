@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import pandas as pd
 import pendulum
 import requests
-from sqlalchemy import String
+from psycopg2.extras import execute_values
 
 from airflow.decorators import dag, task
 from airflow.exceptions import AirflowException
@@ -366,42 +366,31 @@ def minio_etl():
     def save_to_postgres(processed_data: dict) -> None:
         """Save the processed data to PostgreSQL DWH in batches with deduplication"""
         try:
-            postgres_hook = PostgresHook(postgres_conn_id="postgres_dwh")
+            postgres_hook = PostgresHook(postgres_conn_id="postgres_default")
+
             df = pd.DataFrame(processed_data["data"])
 
-            # Create schema if it doesn't exist
-            create_schema_sql = "CREATE SCHEMA IF NOT EXISTS dwh;"
-            postgres_hook.run(create_schema_sql)
+            # Create schema if not exists
+            postgres_hook.run("CREATE SCHEMA IF NOT EXISTS dwh;")
 
-            # Get schema from Avro and create table if it doesn't exist
-            columns = get_postgres_schema_from_avro()
-
-            # Add additional columns for metadata
-            columns.extend(
-                [
-                    {
-                        "name": "processed_date",
-                        "type": "TIMESTAMP WITH TIME ZONE",
-                        "nullable": True,
-                    },
-                    {"name": "processing_pipeline", "type": "TEXT", "nullable": True},
-                    {"name": "valid", "type": "TEXT", "nullable": True},
-                    {"name": "record_hash", "type": "VARCHAR(64)", "nullable": False},
-                ]
-            )
-
-            # Build CREATE TABLE statement
+            # Create table if not exists (keeping existing table structure)
             create_table_sql = """
-            CREATE TABLE IF NOT EXISTS dwh.processed_events (
-                {}
-            );
-            """.format(
-                ",\n                ".join(
-                    f"{col['name']} {col['type']}{' NULL' if col['nullable'] else ' NOT NULL'}"
-                    for col in columns
-                )
-            )
-
+                CREATE TABLE IF NOT EXISTS dwh.processed_events (
+                    event_time TEXT NOT NULL,
+                    event_type TEXT NOT NULL,
+                    product_id BIGINT NOT NULL,
+                    category_id BIGINT NOT NULL,
+                    category_code TEXT NULL,
+                    brand TEXT NULL,
+                    price DOUBLE PRECISION NOT NULL,
+                    user_id BIGINT NOT NULL,
+                    user_session TEXT NOT NULL,
+                    processed_date TIMESTAMP WITH TIME ZONE NULL,
+                    processing_pipeline TEXT NULL,
+                    valid TEXT NULL,
+                    record_hash VARCHAR(64) NOT NULL
+                );
+            """
             postgres_hook.run(create_table_sql)
 
             # Create unique index on record_hash if it doesn't exist
@@ -411,22 +400,32 @@ def minio_etl():
             """
             postgres_hook.run(create_index_sql)
 
-            # Save in batches with conflict handling
+            # Save in batches using raw SQL with ON CONFLICT
             total_rows = len(df)
             for i in range(0, total_rows, BATCH_SIZE):
                 batch_df = df[i : i + BATCH_SIZE]
-                conn = postgres_hook.get_sqlalchemy_engine()
 
-                # Use ON CONFLICT DO NOTHING to skip duplicates at DB level
-                batch_df.to_sql(
-                    name="processed_events",
-                    con=conn,
-                    schema="dwh",
-                    if_exists="append",
-                    index=False,
-                    method="multi",
-                    dtype={"record_hash": String(64)},  # Specify column type for hash
-                )
+                # Convert DataFrame to list of tuples for SQL execution
+                records = batch_df.to_records(index=False)
+                values = [tuple(x) for x in records]
+
+                # Prepare SQL with ON CONFLICT clause
+                insert_sql = """
+                INSERT INTO dwh.processed_events (
+                    event_time, event_type, product_id, category_id, category_code,
+                    brand, price, user_id, user_session, processed_date,
+                    processing_pipeline, valid, record_hash
+                ) VALUES %s
+                ON CONFLICT (record_hash) DO NOTHING;
+                """
+
+                # Execute using execute_values for better performance
+                conn = postgres_hook.get_conn()
+                cur = conn.cursor()
+                execute_values(cur, insert_sql, values)
+                conn.commit()
+                cur.close()
+
                 logger.info(
                     f"Saved batch {i//BATCH_SIZE + 1} ({len(batch_df)} records)"
                 )
