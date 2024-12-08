@@ -1,14 +1,14 @@
 import json
 import logging
 import time
-from datetime import datetime, timedelta
-from hashlib import sha256
-from typing import Any, Dict, List, Optional, Tuple
+from datetime import timedelta
+from typing import Any, Dict, List
 
 import pandas as pd
 import pendulum
 import requests
-from psycopg2.extras import execute_values
+from utils.db_utils import batch_insert_data, create_schema_and_table
+from utils.transform_utils import enrich_record, generate_record_hash, validate_record
 
 from airflow.decorators import dag, task
 from airflow.exceptions import AirflowException
@@ -63,34 +63,6 @@ def with_retry(max_retries: int = 3, initial_delay: float = 1.0):
         return wrapper
 
     return decorator
-
-
-# Add data validation function
-def validate_record(record: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
-    """Validate a single record against business rules"""
-    try:
-        if not isinstance(record.get("price"), (int, float)):
-            return False, "Invalid price type"
-        if record.get("price", 0) < 0:
-            return False, "Negative price"
-        if not record.get("product_id"):
-            return False, "Missing product_id"
-        return True, None
-    except Exception as e:
-        return False, str(e)
-
-
-# Add new function for generating record hash
-def generate_record_hash(record: Dict[str, Any]) -> str:
-    """Generate a unique hash for a record based on business keys"""
-    # Customize these fields based on what makes a record unique in your system
-    key_fields = ["product_id", "timestamp", "user_id"]  # Add/modify fields as needed
-
-    # Create a string of key fields
-    key_string = "|".join(str(record.get(field, "")) for field in key_fields)
-
-    # Generate hash
-    return sha256(key_string.encode()).hexdigest()
 
 
 @provide_session
@@ -312,22 +284,19 @@ def minio_etl():
 
         try:
             flattened_data = []
-            seen_records = set()  # Track unique records
+            seen_records = set()
 
             for record in raw_data["data"]:
                 metrics["total_records"] += 1
                 payload = record.get("payload", {})
 
-                # Generate record hash
                 record_hash = generate_record_hash(payload)
 
-                # Check for duplicates
                 if record_hash in seen_records:
                     metrics["duplicate_records"] += 1
                     logger.info(f"Skipping duplicate record with hash: {record_hash}")
                     continue
 
-                # Validate record
                 is_valid, error_message = validate_record(payload)
 
                 if not is_valid:
@@ -340,20 +309,10 @@ def minio_etl():
                 metrics["valid_records"] += 1
                 seen_records.add(record_hash)
 
-                # Add metadata
-                payload["processed_date"] = datetime.now(
-                    tz=pendulum.timezone("UTC")
-                ).isoformat()
-                payload["processing_pipeline"] = "minio_etl"
-                payload["valid"] = "TRUE"
-                payload["record_hash"] = record_hash  # Store hash for future reference
+                enriched_payload = enrich_record(payload, record_hash)
+                flattened_data.append(enriched_payload)
 
-                flattened_data.append(payload)
-
-            # Log metrics including duplicates
             logger.info(f"Processing metrics: {json.dumps(metrics, indent=2)}")
-
-            # Convert to DataFrame
             df = pd.DataFrame(flattened_data)
 
             return {"data": df.to_dict(orient="records"), "metrics": metrics}
@@ -364,73 +323,40 @@ def minio_etl():
 
     @task()
     def save_to_postgres(processed_data: dict) -> None:
-        """Save the processed data to PostgreSQL DWH in batches with deduplication"""
+        """Save the processed data to PostgreSQL DWH"""
         try:
-            postgres_hook = PostgresHook(postgres_conn_id="postgres_default")
-
+            postgres_hook = PostgresHook(postgres_conn_id="postgres_dwh")
             df = pd.DataFrame(processed_data["data"])
 
-            # Create schema if not exists
-            postgres_hook.run("CREATE SCHEMA IF NOT EXISTS dwh;")
+            columns = [
+                "event_time",
+                "event_type",
+                "product_id",
+                "category_id",
+                "category_code",
+                "brand",
+                "price",
+                "user_id",
+                "user_session",
+                "processed_date",
+                "processing_pipeline",
+                "valid",
+                "record_hash",
+            ]
 
-            # Create table if not exists (keeping existing table structure)
-            create_table_sql = """
-                CREATE TABLE IF NOT EXISTS dwh.processed_events (
-                    event_time TEXT NOT NULL,
-                    event_type TEXT NOT NULL,
-                    product_id BIGINT NOT NULL,
-                    category_id BIGINT NOT NULL,
-                    category_code TEXT NULL,
-                    brand TEXT NULL,
-                    price DOUBLE PRECISION NOT NULL,
-                    user_id BIGINT NOT NULL,
-                    user_session TEXT NOT NULL,
-                    processed_date TIMESTAMP WITH TIME ZONE NULL,
-                    processing_pipeline TEXT NULL,
-                    valid TEXT NULL,
-                    record_hash VARCHAR(64) NOT NULL
-                );
-            """
-            postgres_hook.run(create_table_sql)
+            df = df[columns]
+            df = df.astype(
+                {
+                    "product_id": "int",
+                    "category_id": "int",
+                    "user_id": "int",
+                    "price": "float",
+                }
+            )
 
-            # Create unique index on record_hash if it doesn't exist
-            create_index_sql = """
-            CREATE UNIQUE INDEX IF NOT EXISTS idx_processed_events_record_hash 
-            ON dwh.processed_events(record_hash);
-            """
-            postgres_hook.run(create_index_sql)
+            create_schema_and_table(postgres_hook)
+            batch_insert_data(postgres_hook, df)
 
-            # Save in batches using raw SQL with ON CONFLICT
-            total_rows = len(df)
-            for i in range(0, total_rows, BATCH_SIZE):
-                batch_df = df[i : i + BATCH_SIZE]
-
-                # Convert DataFrame to list of tuples for SQL execution
-                records = batch_df.to_records(index=False)
-                values = [tuple(x) for x in records]
-
-                # Prepare SQL with ON CONFLICT clause
-                insert_sql = """
-                INSERT INTO dwh.processed_events (
-                    event_time, event_type, product_id, category_id, category_code,
-                    brand, price, user_id, user_session, processed_date,
-                    processing_pipeline, valid, record_hash
-                ) VALUES %s
-                ON CONFLICT (record_hash) DO NOTHING;
-                """
-
-                # Execute using execute_values for better performance
-                conn = postgres_hook.get_conn()
-                cur = conn.cursor()
-                execute_values(cur, insert_sql, values)
-                conn.commit()
-                cur.close()
-
-                logger.info(
-                    f"Saved batch {i//BATCH_SIZE + 1} ({len(batch_df)} records)"
-                )
-
-            # Log final metrics
             logger.info(f"Total records processed: {processed_data['metrics']}")
 
         except Exception as e:
