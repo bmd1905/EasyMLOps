@@ -42,29 +42,6 @@ SCHEMA_SUBJECT = Variable.get("SCHEMA_SUBJECT", default_var="raw-events-topic-sc
 BATCH_SIZE = int(Variable.get("BATCH_SIZE", default_var="1000"))
 
 
-# Add retry decorator
-def with_retry(max_retries: int = 3, initial_delay: float = 1.0):
-    def decorator(func):
-        def wrapper(*args, **kwargs):
-            delay = initial_delay
-            last_exception = None
-
-            for retry in range(max_retries):
-                try:
-                    return func(*args, **kwargs)
-                except Exception as e:
-                    last_exception = e
-                    logger.warning(f"Attempt {retry + 1} failed: {str(e)}")
-                    time.sleep(delay)
-                    delay *= 2  # Exponential backoff
-
-            raise last_exception
-
-        return wrapper
-
-    return decorator
-
-
 @provide_session
 def create_minio_conn(session=None):
     """Create MinIO connection if it doesn't exist"""
