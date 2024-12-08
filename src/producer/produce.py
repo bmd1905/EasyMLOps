@@ -148,7 +148,7 @@ def create_streams(servers, avro_schemas_path, schema_registry_client):
 
             # Fake invalid record
             if index % 10 == 0:
-                record["price"] = "invalid"
+                record["price"] = -100
 
             # Create the record including schema, and data
             formatted_record = {

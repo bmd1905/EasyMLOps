@@ -4,6 +4,7 @@ from typing import Dict, Type
 from dotenv import find_dotenv, load_dotenv
 from pyflink.datastream import StreamExecutionEnvironment
 
+from .jobs.alert_invalid_events_job import AlertInvalidEventsJob
 from .jobs.base import FlinkJob
 from .jobs.schema_validation_job import SchemaValidationJob
 
@@ -14,6 +15,7 @@ def get_available_jobs() -> Dict[str, Type[FlinkJob]]:
     """Return a dictionary of available jobs"""
     return {
         "schema_validation": SchemaValidationJob,
+        "alert_invalid_events": AlertInvalidEventsJob,
     }
 
 
