@@ -1,19 +1,14 @@
-import json
 import logging
 from datetime import timedelta
-from typing import Any, Dict, List
 
-import pandas as pd
 import pendulum
-import requests
-from utils.db_utils import batch_insert_data, create_schema_and_table
-from utils.transform_utils import enrich_record, generate_record_hash, validate_record
-
 from airflow.decorators import dag, task
 from airflow.exceptions import AirflowException
-from airflow.models import Variable
-from airflow.providers.amazon.aws.hooks.s3 import S3Hook
-from airflow.providers.postgres.hooks.postgres import PostgresHook
+
+from config.minio_config import MinioConfig
+from tasks.minio_tasks import check_minio_connection, load_from_minio
+from tasks.postgres_tasks import check_postgres_connection, save_to_postgres
+from tasks.transform_tasks import transform_data
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -28,103 +23,20 @@ default_args = {
     "retry_delay": timedelta(minutes=5),
 }
 
-# Replace hard-coded config with Variables
-BUCKET_NAME = Variable.get("MINIO_BUCKET_NAME", default_var="validated-events-bucket")
-PATH_PREFIX = Variable.get(
-    "MINIO_PATH_PREFIX", default_var="topics/validated-events-topic/year=2024/month=12"
-)
-SCHEMA_REGISTRY_URL = Variable.get(
-    "SCHEMA_REGISTRY_URL", default_var="http://schema-registry:8081"
-)
-SCHEMA_SUBJECT = Variable.get("SCHEMA_SUBJECT", default_var="raw-events-topic-schema")
-BATCH_SIZE = int(Variable.get("BATCH_SIZE", default_var="1000"))
-
 
 @task()
-def check_postgres_connection() -> bool:
-    """Check if PostgreSQL connection is working"""
-    try:
-        postgres_hook = PostgresHook(postgres_conn_id="postgres_dwh")
-        postgres_hook.get_conn()  # This will try to establish a connection
-        print("Successfully connected to PostgreSQL DWH")
-        return True
-    except Exception as e:
-        logger.error(f"Failed to connect to PostgreSQL DWH: {str(e)}")
-        return False
-
-
-@task()
-def ensure_bucket_exists() -> bool:
-    """Ensure the required MinIO bucket exists"""
-    try:
-        s3_hook = S3Hook(aws_conn_id="minio_conn")
-        if not s3_hook.check_for_bucket(BUCKET_NAME):
-            s3_hook.create_bucket(bucket_name=BUCKET_NAME)
-        return True
-    except Exception as e:
-        logger.error(f"Failed to create bucket: {str(e)}")
-        return False
-
-
-def get_latest_schema_from_registry() -> Dict[str, Any]:
-    """Fetch the latest schema from Schema Registry"""
-    try:
-        response = requests.get(
-            f"{SCHEMA_REGISTRY_URL}/subjects/{SCHEMA_SUBJECT}/versions/latest",
-            timeout=5,
+def check_prerequisites(postgres_ok: bool, minio_ok: bool) -> None:
+    """Check if all prerequisites are met before running the pipeline"""
+    if not (postgres_ok and minio_ok):
+        raise AirflowException(
+            "Prerequisites not met: Database or MinIO connection not available"
         )
-        response.raise_for_status()
-        return json.loads(response.json()["schema"])
-    except requests.exceptions.RequestException as e:
-        raise AirflowException(f"Failed to fetch schema from registry: {str(e)}")
-    except (KeyError, json.JSONDecodeError) as e:
-        raise AirflowException(f"Invalid schema format received: {str(e)}")
-
-
-def get_postgres_schema_from_avro() -> List[Dict[str, Any]]:
-    """Convert Avro schema to PostgreSQL column definitions"""
-    try:
-        # Fetch schema from registry instead of file
-        avro_schema = get_latest_schema_from_registry()
-
-        # Map Avro types to PostgreSQL types
-        type_mapping = {
-            "string": "TEXT",
-            "long": "BIGINT",
-            "double": "DOUBLE PRECISION",
-            "int": "INTEGER",
-            "boolean": "BOOLEAN",
-            "null": "NULL",
-        }
-
-        columns = []
-        for field in avro_schema["fields"]:
-            field_type = field["type"]
-            # Handle union types (e.g., ["null", "string"])
-            if isinstance(field_type, list):
-                # Use the non-null type if available
-                actual_type = next(
-                    (t for t in field_type if t != "null"), field_type[0]
-                )
-                nullable = "null" in field_type
-            else:
-                actual_type = field_type
-                nullable = False
-
-            pg_type = type_mapping.get(actual_type, "TEXT")
-            columns.append(
-                {"name": field["name"], "type": pg_type, "nullable": nullable}
-            )
-
-        return columns
-    except Exception as e:
-        raise AirflowException(f"Failed to process Avro schema: {str(e)}")
 
 
 @dag(
     dag_id="minio_data_pipeline",
     default_args=default_args,
-    description="A simple pipeline to process data from MinIO",
+    description="ETL pipeline from MinIO to PostgreSQL",
     schedule="@hourly",
     start_date=pendulum.datetime(2024, 1, 1, tz="UTC"),
     catchup=False,
@@ -140,170 +52,22 @@ def minio_etl():
     3. Saves the processed data to PostgreSQL DWH
     """
 
-    # Run connection checks first
+    # Load configuration
+    config = MinioConfig.from_airflow_variables()
+
+    # Run connection checks
     postgres_check = check_postgres_connection()
-    bucket_check = ensure_bucket_exists()
+    minio_check = check_minio_connection()
 
-    # Only proceed if both checks pass
-    @task()
-    def check_prerequisites(postgres_ok: bool, bucket_ok: bool) -> None:
-        if not (postgres_ok and bucket_ok):
-            raise AirflowException(
-                "Prerequisites not met: Database or MinIO bucket not available"
-            )
+    # Check prerequisites
+    prerequisites_met = check_prerequisites(postgres_check, minio_check)
 
-    @task()
-    def load_from_minio() -> dict:
-        """Load all JSON files from MinIO and return as a dictionary"""
-        try:
-            s3_hook = S3Hook(aws_conn_id="minio_conn")
-
-            # Define multiple paths to check
-            # current_time = datetime.now(tz=pendulum.timezone("UTC"))
-
-            # path_prefix = "topics/raw-events-topic/year=2024/month=11/day=27/hour=13/"
-            path_prefix = PATH_PREFIX
-
-            all_data = []
-            files_found = False
-
-            # List all keys in the directory
-            keys = s3_hook.list_keys(bucket_name=BUCKET_NAME, prefix=path_prefix)
-
-            if keys:
-                files_found = True
-                print(f"Found {len(keys)} files in path: {path_prefix}")
-
-                for key in keys:
-                    # Read the file
-                    data = s3_hook.read_key(key=key, bucket_name=BUCKET_NAME)
-                    if not data:
-                        continue
-
-                    try:
-                        # Load JSON data
-                        json_data = json.loads(data)
-                        if isinstance(json_data, list):
-                            all_data.extend(json_data)
-                        else:
-                            all_data.append(json_data)
-                    except json.JSONDecodeError as e:
-                        print(f"Error decoding JSON from file {key}: {str(e)}")
-                        continue
-
-            if not files_found:
-                raise AirflowException(
-                    f"No JSON files found in any of the checked paths: {path_prefix}"
-                )
-
-            if not all_data:
-                raise AirflowException("No valid JSON data found in any files")
-
-            print(f"Successfully loaded {len(all_data)} records")
-            return {"data": all_data}
-
-        except Exception as e:
-            raise AirflowException(f"Failed to load data from MinIO: {str(e)}")
-
-    @task()
-    def transform_data(raw_data: dict) -> dict:
-        """Transform the data with validation, deduplication, and metrics"""
-        metrics = {
-            "total_records": 0,
-            "valid_records": 0,
-            "invalid_records": 0,
-            "duplicate_records": 0,
-            "validation_errors": {},
-        }
-
-        try:
-            flattened_data = []
-            seen_records = set()
-
-            for record in raw_data["data"]:
-                metrics["total_records"] += 1
-                payload = record.get("payload", {})
-
-                record_hash = generate_record_hash(payload)
-
-                if record_hash in seen_records:
-                    metrics["duplicate_records"] += 1
-                    logger.info(f"Skipping duplicate record with hash: {record_hash}")
-                    continue
-
-                is_valid, error_message = validate_record(payload)
-
-                if not is_valid:
-                    metrics["invalid_records"] += 1
-                    metrics["validation_errors"][error_message] = (
-                        metrics["validation_errors"].get(error_message, 0) + 1
-                    )
-                    continue
-
-                metrics["valid_records"] += 1
-                seen_records.add(record_hash)
-
-                enriched_payload = enrich_record(payload, record_hash)
-                flattened_data.append(enriched_payload)
-
-            logger.info(f"Processing metrics: {json.dumps(metrics, indent=2)}")
-            df = pd.DataFrame(flattened_data)
-
-            return {"data": df.to_dict(orient="records"), "metrics": metrics}
-
-        except Exception as e:
-            logger.error(f"Transform error: {str(e)}")
-            raise AirflowException(f"Failed to transform data: {str(e)}")
-
-    @task()
-    def save_to_postgres(processed_data: dict) -> None:
-        """Save the processed data to PostgreSQL DWH"""
-        try:
-            postgres_hook = PostgresHook(postgres_conn_id="postgres_dwh")
-            df = pd.DataFrame(processed_data["data"])
-
-            columns = [
-                "event_time",
-                "event_type",
-                "product_id",
-                "category_id",
-                "category_code",
-                "brand",
-                "price",
-                "user_id",
-                "user_session",
-                "processed_date",
-                "processing_pipeline",
-                "valid",
-                "record_hash",
-            ]
-
-            df = df[columns]
-            df = df.astype(
-                {
-                    "product_id": "int",
-                    "category_id": "int",
-                    "user_id": "int",
-                    "price": "float",
-                }
-            )
-
-            create_schema_and_table(postgres_hook)
-            batch_insert_data(postgres_hook, df)
-
-            logger.info(f"Total records processed: {processed_data['metrics']}")
-
-        except Exception as e:
-            logger.error(f"Database error: {str(e)}")
-            raise AirflowException(f"Failed to save data to PostgreSQL: {str(e)}")
-
-    # Define the task dependencies with the new prerequisite check
-    prerequisites_met = check_prerequisites(postgres_check, bucket_check)
-    raw_data = load_from_minio()
+    # Define the main pipeline tasks
+    raw_data = load_from_minio(config)
     processed_data = transform_data(raw_data)
     save_task = save_to_postgres(processed_data)
 
-    # Set up dependencies using the task instances
+    # Set up task dependencies
     prerequisites_met >> raw_data >> processed_data >> save_task
 
 
