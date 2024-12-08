@@ -41,26 +41,29 @@ BATCH_SIZE = int(Variable.get("BATCH_SIZE", default_var="1000"))
 
 
 @task()
-def check_postgres_connection() -> None:
+def check_postgres_connection() -> bool:
     """Check if PostgreSQL connection is working"""
     try:
         postgres_hook = PostgresHook(postgres_conn_id="postgres_dwh")
         postgres_hook.get_conn()  # This will try to establish a connection
         print("Successfully connected to PostgreSQL DWH")
+        return True
     except Exception as e:
-        raise AirflowException(f"Failed to connect to PostgreSQL DWH: {str(e)}")
+        logger.error(f"Failed to connect to PostgreSQL DWH: {str(e)}")
+        return False
 
 
 @task()
-def ensure_bucket_exists() -> None:
+def ensure_bucket_exists() -> bool:
     """Ensure the required MinIO bucket exists"""
     try:
         s3_hook = S3Hook(aws_conn_id="minio_conn")
         if not s3_hook.check_for_bucket(BUCKET_NAME):
             s3_hook.create_bucket(bucket_name=BUCKET_NAME)
-
+        return True
     except Exception as e:
-        raise AirflowException(f"Failed to create bucket: {str(e)}")
+        logger.error(f"Failed to create bucket: {str(e)}")
+        return False
 
 
 def get_latest_schema_from_registry() -> Dict[str, Any]:
@@ -137,8 +140,17 @@ def minio_etl():
     3. Saves the processed data to PostgreSQL DWH
     """
 
-    check_postgres_connection()
-    ensure_bucket_exists()
+    # Run connection checks first
+    postgres_check = check_postgres_connection()
+    bucket_check = ensure_bucket_exists()
+
+    # Only proceed if both checks pass
+    @task()
+    def check_prerequisites(postgres_ok: bool, bucket_ok: bool) -> None:
+        if not (postgres_ok and bucket_ok):
+            raise AirflowException(
+                "Prerequisites not met: Database or MinIO bucket not available"
+            )
 
     @task()
     def load_from_minio() -> dict:
@@ -285,10 +297,14 @@ def minio_etl():
             logger.error(f"Database error: {str(e)}")
             raise AirflowException(f"Failed to save data to PostgreSQL: {str(e)}")
 
-    # Define the task dependencies
+    # Define the task dependencies with the new prerequisite check
+    prerequisites_met = check_prerequisites(postgres_check, bucket_check)
     raw_data = load_from_minio()
     processed_data = transform_data(raw_data)
-    save_to_postgres(processed_data)
+    save_task = save_to_postgres(processed_data)
+
+    # Set up dependencies using the task instances
+    prerequisites_met >> raw_data >> processed_data >> save_task
 
 
 # Create DAG instance
