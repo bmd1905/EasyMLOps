@@ -125,8 +125,8 @@ def create_analytical_views(postgres_hook: PostgresHook) -> None:
                 u.user_id,
                 f.user_session,
                 COUNT(*) as event_count,
-                MIN(d.event_timestamp) as session_start,
-                MAX(d.event_timestamp) as session_end,
+                MIN(f.event_timestamp) as session_start,
+                MAX(f.event_timestamp) as session_end,
                 COUNT(DISTINCT p.product_id) as unique_products_viewed
             FROM dwh.fact_events f
             JOIN dwh.dim_user u ON f.user_id = u.user_id
