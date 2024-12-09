@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+
 from airflow.models import Variable
 
 
@@ -9,6 +10,15 @@ class DataPipelineConfig:
     schema_registry_url: str
     schema_subject: str
     batch_size: int
+
+    def __post_init__(self):
+        """Validate the configuration"""
+        if not self.bucket_name:
+            raise ValueError("bucket_name cannot be empty")
+        if not self.path_prefix:
+            raise ValueError("path_prefix cannot be empty")
+        if self.batch_size <= 0:
+            raise ValueError("batch_size must be positive")
 
     @classmethod
     def from_airflow_variables(cls):
