@@ -149,6 +149,66 @@ def create_analytical_views(postgres_hook: PostgresHook) -> None:
             JOIN dwh.dim_product p ON f.product_id = p.product_id
             GROUP BY c.category_l1, c.category_l2, c.category_l3
         """,
+        "dwh.vw_ml_purchase_prediction": """
+            WITH cart_purchase_events AS (
+                -- Get cart and purchase events, removing duplicates
+                SELECT DISTINCT 
+                    f.event_type,
+                    f.product_id,
+                    f.user_id,
+                    f.user_session,
+                    f.event_timestamp,
+                    f.category_id,
+                    p.price
+                FROM dwh.fact_events f
+                JOIN dwh.dim_product p ON f.product_id = p.product_id
+                WHERE f.event_type IN ('cart', 'purchase')
+            ),
+            purchase_flags AS (
+                -- Calculate is_purchased flag
+                SELECT 
+                    user_session,
+                    product_id,
+                    MAX(CASE WHEN event_type = 'purchase' THEN 1 ELSE 0 END) as is_purchased
+                FROM cart_purchase_events
+                GROUP BY user_session, product_id
+            ),
+            session_activity_counts AS (
+                -- Count all activities per session
+                SELECT 
+                    user_session,
+                    COUNT(*) as activity_count
+                FROM dwh.fact_events
+                GROUP BY user_session
+            )
+            SELECT DISTINCT
+                cp.user_session,
+                cp.product_id,
+                cp.price,
+                cp.user_id,
+                EXTRACT(DOW FROM f.event_timestamp) as event_weekday,
+                c.category_l1 as category_code_level1,
+                c.category_l2 as category_code_level2,
+                p.brand,
+                sa.activity_count,
+                pf.is_purchased
+            FROM cart_purchase_events cp
+            JOIN purchase_flags pf 
+                ON cp.user_session = pf.user_session 
+                AND cp.product_id = pf.product_id
+            JOIN dwh.fact_events f 
+                ON cp.user_session = f.user_session 
+                AND cp.product_id = f.product_id
+                AND f.event_type = 'cart'
+            JOIN dwh.dim_category c 
+                ON cp.category_id = c.category_id
+            JOIN dwh.dim_product p 
+                ON cp.product_id = p.product_id
+            JOIN session_activity_counts sa 
+                ON cp.user_session = sa.user_session
+            WHERE c.category_l1 IS NOT NULL 
+                AND c.category_l2 IS NOT NULL
+        """
     }
 
     for view_name, view_sql in views.items():
