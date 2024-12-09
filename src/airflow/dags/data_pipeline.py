@@ -1,5 +1,6 @@
 import logging
 from datetime import timedelta
+from typing import Any, Dict
 
 import pendulum
 from config.data_pipeline_config import DataPipelineConfig
@@ -8,6 +9,7 @@ from tasks.bronze.ingest_raw_data import (
     ingest_raw_data,
 )
 from tasks.bronze.validate_raw_data import validate_raw_data
+from tasks.silver.transform_data import transform_data
 
 from airflow.decorators import dag, task_group
 
@@ -26,7 +28,7 @@ default_args = {
 
 
 @task_group(group_id="bronze_layer")
-def bronze_layer(config: DataPipelineConfig):
+def bronze_layer(config: DataPipelineConfig) -> Dict[str, Any]:
     """Task group for the bronze layer of the data pipeline."""
 
     # Check MinIO connection
@@ -45,6 +47,25 @@ def bronze_layer(config: DataPipelineConfig):
     validated_data = validate_raw_data(raw_data)
     if validated_data is None:
         logger.error("Validation of raw data failed.")
+        return None
+
+    return validated_data
+
+
+@task_group(group_id="silver_layer")
+def silver_layer(validated_data: Dict[str, Any]) -> Dict[str, Any]:
+    """Task group for the silver layer of the data pipeline."""
+    if validated_data is None:
+        logger.error("Validated data is None.")
+        return None
+
+    # Transform data
+    transformed_data = transform_data(validated_data)
+    if transformed_data is None:
+        logger.error("Data transformation failed.")
+        return None
+
+    return transformed_data
 
 
 @dag(
@@ -57,11 +78,15 @@ def bronze_layer(config: DataPipelineConfig):
     tags=["data_lake", "data_warehouse"],
 )
 def data_pipeline():
+    """Main DAG function that orchestrates the data pipeline."""
     # Load configuration
     config = DataPipelineConfig.from_airflow_variables()
 
-    # Bronze layer
-    data_pipeline_result = bronze_layer(config)
+    # Execute bronze layer and get validated data
+    validated_data = bronze_layer(config)
+
+    # Pass validated data to silver layer
+    silver_layer(validated_data)
 
 
 # Create DAG instance
