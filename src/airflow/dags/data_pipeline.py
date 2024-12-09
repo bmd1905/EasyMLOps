@@ -10,6 +10,7 @@ from tasks.bronze.ingest_raw_data import (
 )
 from tasks.bronze.validate_raw_data import validate_raw_data
 from tasks.silver.transform_data import transform_data
+from tasks.gold.load_to_dwh import load_dimensions_and_facts
 
 from airflow.decorators import dag, task_group
 
@@ -68,6 +69,22 @@ def silver_layer(validated_data: Dict[str, Any]) -> Dict[str, Any]:
     return transformed_data
 
 
+@task_group(group_id="gold_layer")
+def gold_layer(transformed_data: Dict[str, Any]) -> bool:
+    """Task group for the gold layer of the data pipeline."""
+    if transformed_data is None:
+        logger.error("Transformed data is None.")
+        return False
+
+    # Load dimensions and facts
+    success = load_dimensions_and_facts(transformed_data)
+    if not success:
+        logger.error("Failed to load dimensional model.")
+        return False
+
+    return True
+
+
 @dag(
     dag_id="data_pipeline",
     default_args=default_args,
@@ -86,7 +103,10 @@ def data_pipeline():
     validated_data = bronze_layer(config)
 
     # Pass validated data to silver layer
-    silver_layer(validated_data)
+    transformed_data = silver_layer(validated_data)
+
+    # Pass transformed data to gold layer
+    gold_layer(transformed_data)
 
 
 # Create DAG instance
