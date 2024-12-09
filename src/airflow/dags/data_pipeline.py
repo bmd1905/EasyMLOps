@@ -3,12 +3,13 @@ from datetime import timedelta
 
 import pendulum
 from config.data_pipeline_config import DataPipelineConfig
-from tasks.minio_tasks import check_minio_connection, load_from_minio
-from tasks.postgres_tasks import check_postgres_connection, save_to_postgres
-from tasks.transform_tasks import transform_data
+from tasks.bronze.ingest_raw_data import (
+    check_minio_connection,
+    ingest_raw_data,
+)
+from tasks.bronze.validate_raw_data import validate_raw_data
 
-from airflow.decorators import dag, task, task_group
-from airflow.exceptions import AirflowException
+from airflow.decorators import dag, task_group
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -24,62 +25,43 @@ default_args = {
 }
 
 
-@task_group(group_id="connection_checks")
-def check_connections():
-    """TaskGroup for checking all required connections"""
-    # Run connection checks
-    postgres_check = check_postgres_connection()
-    minio_check = check_minio_connection()
+@task_group(group_id="bronze_layer")
+def bronze_layer(config: DataPipelineConfig):
+    """Task group for the bronze layer of the data pipeline."""
 
-    @task()
-    def check_prerequisites(postgres_ok: bool, minio_ok: bool) -> None:
-        """Check if all prerequisites are met before running the pipeline"""
-        if not (postgres_ok and minio_ok):
-            raise AirflowException(
-                "Prerequisites not met: Database or MinIO connection not available"
-            )
+    # Check MinIO connection
+    valid = check_minio_connection()
+    if not valid:
+        logger.error("MinIO connection failed.")
+        return None
 
-    # Set up dependencies within the connection check group
-    check_prerequisites(postgres_check, minio_check)
+    # Ingest raw data
+    raw_data = ingest_raw_data(config, valid)
+    if raw_data is None:
+        logger.error("Ingested raw data is None.")
+        return None
 
-
-@task_group(group_id="data_processing")
-def process_data(config: DataPipelineConfig):
-    """TaskGroup for data processing steps"""
-    # Define the main pipeline tasks
-    raw_data = load_from_minio(config)
-    processed_data = transform_data(raw_data)
-    save_to_postgres(processed_data)
+    # Validate raw data
+    validated_data = validate_raw_data(raw_data)
+    if validated_data is None:
+        logger.error("Validation of raw data failed.")
 
 
 @dag(
     dag_id="data_pipeline",
     default_args=default_args,
-    description="Data pipeline from Data Lake to Data Warehouse",
+    description="Data pipeline",
     schedule="@hourly",
     start_date=pendulum.datetime(2024, 1, 1, tz="UTC"),
     catchup=False,
     tags=["data_lake", "data_warehouse"],
 )
 def data_pipeline():
-    """
-    ### Data Pipeline
-
-    This pipeline:
-    1. Loads all JSON data from Data Lake
-    2. Transforms the data by adding processing metadata
-    3. Saves the processed data to Data Warehouse
-    """
-
     # Load configuration
     config = DataPipelineConfig.from_airflow_variables()
 
-    # Define task groups
-    connection_checks = check_connections()
-    data_processing = process_data(config)
-
-    # Set up dependencies between task groups
-    connection_checks >> data_processing
+    # Bronze layer
+    data_pipeline_result = bronze_layer(config)
 
 
 # Create DAG instance

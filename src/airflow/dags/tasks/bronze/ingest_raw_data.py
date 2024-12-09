@@ -2,7 +2,6 @@ import json
 from typing import Any, Dict
 
 from config.data_pipeline_config import DataPipelineConfig
-from utils.error_handling import MinioError
 
 from airflow.decorators import task
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
@@ -16,12 +15,12 @@ def check_minio_connection() -> bool:
         s3_hook.get_conn()
         return True
     except Exception as e:
-        raise MinioError(f"Failed to connect to MinIO: {str(e)}")
+        raise Exception(f"Failed to connect to MinIO: {str(e)}")
 
 
 @task()
-def load_from_minio(config: DataPipelineConfig) -> Dict[str, Any]:
-    """Load data from MinIO"""
+def ingest_raw_data(config: DataPipelineConfig, valid: bool = True) -> Dict[str, Any]:
+    """Ingest raw data from MinIO"""
     try:
         s3_hook = S3Hook(aws_conn_id="minio_conn")
         all_data = []
@@ -46,12 +45,12 @@ def load_from_minio(config: DataPipelineConfig) -> Dict[str, Any]:
                         print(f"Error decoding JSON from file {key}: {str(e)}")
 
         if not files_found:
-            raise MinioError(f"No files found in path: {config.path_prefix}")
+            raise Exception(f"No files found in path: {config.path_prefix}")
 
         if not all_data:
-            raise MinioError("No valid JSON data found in any files")
+            raise Exception("No valid JSON data found in any files")
 
         return {"data": all_data}
 
     except Exception as e:
-        raise MinioError(f"Failed to load data from MinIO: {str(e)}")
+        raise Exception(f"Failed to load data from MinIO: {str(e)}")
