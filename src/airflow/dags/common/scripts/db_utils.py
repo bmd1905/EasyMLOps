@@ -35,28 +35,37 @@ def create_schema_and_table(postgres_hook: PostgresHook, schema_class: Any, tabl
 
 def batch_insert_data(postgres_hook: PostgresHook, df: pd.DataFrame, table_name: str) -> None:
     """Insert data in batches"""
-    # Convert DataFrame to native Python types
-    df = df.astype(object)  # Convert all columns to object type first
-    df = df.where(pd.notnull(df), None)  # Replace NaN with None
-    
-    # Convert DataFrame to list of tuples with native Python types
-    data = [tuple(x) for x in df.to_numpy()]
-    
-    # Get column names
-    columns = df.columns.tolist()
-    
-    # Create placeholders for SQL query
-    placeholders = ','.join(['%s'] * len(columns))
-    
-    # Construct insert query
-    insert_query = f"""
-    INSERT INTO {table_name} ({','.join(columns)})
-    VALUES ({placeholders})
-    ON CONFLICT DO NOTHING;
-    """
-    
-    # Execute in batches
-    batch_size = 1000
-    for i in range(0, len(data), batch_size):
-        batch = data[i:i + batch_size]
-        postgres_hook.run(insert_query, parameters=batch)
+    try:
+        # Convert DataFrame to native Python types
+        df = df.astype(object)  # Convert all columns to object type first
+        df = df.where(pd.notnull(df), None)  # Replace NaN with None
+        
+        # Get connection and cursor
+        conn = postgres_hook.get_conn()
+        cur = conn.cursor()
+        
+        # Get column names
+        columns = df.columns.tolist()
+        
+        # Convert DataFrame to list of tuples
+        values = df.to_records(index=False).tolist()
+        
+        # Construct insert query
+        insert_query = f"""
+            INSERT INTO {table_name} ({','.join(columns)})
+            VALUES %s
+            ON CONFLICT DO NOTHING;
+        """
+        
+        # Execute in batches using execute_values
+        batch_size = 1000
+        execute_values(cur, insert_query, values, page_size=batch_size)
+        
+        # Commit the transaction
+        conn.commit()
+        
+    except Exception as e:
+        raise AirflowException(f"Failed to insert data: {str(e)}")
+    finally:
+        if 'cur' in locals():
+            cur.close()
