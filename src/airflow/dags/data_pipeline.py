@@ -7,7 +7,7 @@ from tasks.minio_tasks import check_minio_connection, load_from_minio
 from tasks.postgres_tasks import check_postgres_connection, save_to_postgres
 from tasks.transform_tasks import transform_data
 
-from airflow.decorators import dag, task
+from airflow.decorators import dag, task, task_group
 from airflow.exceptions import AirflowException
 
 logging.basicConfig(level=logging.INFO)
@@ -24,13 +24,32 @@ default_args = {
 }
 
 
-@task()
-def check_prerequisites(postgres_ok: bool, minio_ok: bool) -> None:
-    """Check if all prerequisites are met before running the pipeline"""
-    if not (postgres_ok and minio_ok):
-        raise AirflowException(
-            "Prerequisites not met: Database or MinIO connection not available"
-        )
+@task_group(group_id="connection_checks")
+def check_connections():
+    """TaskGroup for checking all required connections"""
+    # Run connection checks
+    postgres_check = check_postgres_connection()
+    minio_check = check_minio_connection()
+
+    @task()
+    def check_prerequisites(postgres_ok: bool, minio_ok: bool) -> None:
+        """Check if all prerequisites are met before running the pipeline"""
+        if not (postgres_ok and minio_ok):
+            raise AirflowException(
+                "Prerequisites not met: Database or MinIO connection not available"
+            )
+
+    # Set up dependencies within the connection check group
+    check_prerequisites(postgres_check, minio_check)
+
+
+@task_group(group_id="data_processing")
+def process_data(config: DataPipelineConfig):
+    """TaskGroup for data processing steps"""
+    # Define the main pipeline tasks
+    raw_data = load_from_minio(config)
+    processed_data = transform_data(raw_data)
+    save_to_postgres(processed_data)
 
 
 @dag(
@@ -55,20 +74,12 @@ def data_pipeline():
     # Load configuration
     config = DataPipelineConfig.from_airflow_variables()
 
-    # Run connection checks
-    postgres_check = check_postgres_connection()
-    minio_check = check_minio_connection()
+    # Define task groups
+    connection_checks = check_connections()
+    data_processing = process_data(config)
 
-    # Check prerequisites
-    prerequisites_met = check_prerequisites(postgres_check, minio_check)
-
-    # Define the main pipeline tasks
-    raw_data = load_from_minio(config)
-    processed_data = transform_data(raw_data)
-    save_task = save_to_postgres(processed_data)
-
-    # Set up task dependencies
-    prerequisites_met >> raw_data >> processed_data >> save_task
+    # Set up dependencies between task groups
+    connection_checks >> data_processing
 
 
 # Create DAG instance
