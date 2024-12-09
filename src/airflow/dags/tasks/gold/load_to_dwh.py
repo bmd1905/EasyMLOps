@@ -2,14 +2,14 @@ from typing import Any, Dict
 
 import pandas as pd
 from common.scripts.db_utils import batch_insert_data, create_schema_and_table
-from common.scripts.schemas.dim_schemas import (
+from common.scripts.dim_schemas import (
     DimCategorySchema,
     DimDateSchema,
     DimProductSchema,
     DimUserSchema,
 )
-from common.scripts.schemas.event_schema import EventSchema
-from common.scripts.schemas.fact_schemas import FactEventSchema
+from common.scripts.event_schema import EventSchema
+from common.scripts.fact_schemas import FactEventSchema
 
 from airflow.decorators import task
 from airflow.providers.postgres.hooks.postgres import PostgresHook
