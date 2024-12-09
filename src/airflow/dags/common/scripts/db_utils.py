@@ -28,7 +28,11 @@ def create_schema_and_table(postgres_hook: PostgresHook, schema_class: Any, tabl
 
 def batch_insert_data(postgres_hook: PostgresHook, df: pd.DataFrame, table_name: str) -> None:
     """Insert data in batches"""
-    # Convert DataFrame to list of tuples
+    # Convert DataFrame to native Python types
+    df = df.astype(object)  # Convert all columns to object type first
+    df = df.where(pd.notnull(df), None)  # Replace NaN with None
+    
+    # Convert DataFrame to list of tuples with native Python types
     data = [tuple(x) for x in df.to_numpy()]
     
     # Get column names
