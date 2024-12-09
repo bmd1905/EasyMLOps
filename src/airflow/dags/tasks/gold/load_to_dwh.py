@@ -17,32 +17,32 @@ from airflow.providers.postgres.hooks.postgres import PostgresHook
 
 def create_dim_user(df: pd.DataFrame) -> pd.DataFrame:
     """Create user dimension table"""
-    dim_user = df[["user_id"]].drop_duplicates()
-    dim_user["user_id"] = dim_user["user_id"].astype(int)
-    return dim_user
+    dim_user = df[["user_id"]].copy()
+    dim_user.loc[:, "user_id"] = dim_user["user_id"].astype(int)
+    return dim_user.drop_duplicates()
 
 
 def create_dim_product(df: pd.DataFrame) -> pd.DataFrame:
     """Create product dimension table"""
-    dim_product = df[["product_id", "brand", "price", "price_tier"]].drop_duplicates()
-    dim_product["product_id"] = dim_product["product_id"].astype(int)
-    dim_product["price"] = dim_product["price"].astype(float)
-    return dim_product
+    dim_product = df[["product_id", "brand", "price", "price_tier"]].copy()
+    dim_product.loc[:, "product_id"] = dim_product["product_id"].astype(int)
+    dim_product.loc[:, "price"] = dim_product["price"].astype(float)
+    return dim_product.drop_duplicates()
 
 
 def create_dim_category(df: pd.DataFrame) -> pd.DataFrame:
     """Create category dimension table"""
     dim_category = df[
         ["category_id", "category_code", "category_l1", "category_l2", "category_l3"]
-    ].drop_duplicates()
-    dim_category["category_id"] = dim_category["category_id"].astype(int)
-    return dim_category
+    ].copy()
+    dim_category.loc[:, "category_id"] = dim_category["category_id"].astype(int)
+    return dim_category.drop_duplicates()
 
 
 def create_dim_date(df: pd.DataFrame) -> pd.DataFrame:
     """Create date dimension table"""
-    dim_date = df[["event_date", "event_hour", "day_of_week"]].drop_duplicates()
-    return dim_date
+    dim_date = df[["event_date", "event_hour", "day_of_week"]].copy()
+    return dim_date.drop_duplicates()
 
 
 def create_fact_events(df: pd.DataFrame, dims: Dict[str, pd.DataFrame]) -> pd.DataFrame:
@@ -58,11 +58,13 @@ def create_fact_events(df: pd.DataFrame, dims: Dict[str, pd.DataFrame]) -> pd.Da
             "user_session",
             "events_in_session",
         ]
-    ]
-    fact_events["user_id"] = fact_events["user_id"].astype(int)
-    fact_events["product_id"] = fact_events["product_id"].astype(int)
-    fact_events["category_id"] = fact_events["category_id"].astype(int)
-    fact_events["events_in_session"] = fact_events["events_in_session"].astype(int)
+    ].copy()
+    
+    fact_events.loc[:, "user_id"] = fact_events["user_id"].astype(int)
+    fact_events.loc[:, "product_id"] = fact_events["product_id"].astype(int)
+    fact_events.loc[:, "category_id"] = fact_events["category_id"].astype(int)
+    fact_events.loc[:, "events_in_session"] = fact_events["events_in_session"].astype(int)
+    
     return fact_events
 
 

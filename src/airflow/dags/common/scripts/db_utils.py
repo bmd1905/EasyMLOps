@@ -12,18 +12,25 @@ logger = logging.getLogger(__name__)
 
 def create_schema_and_table(postgres_hook: PostgresHook, schema_class: Any, table_name: str) -> None:
     """Create table and indexes based on schema definition"""
-    # Create table
-    columns = [f"{col} {dtype}" for col, dtype in schema_class.table_schema.items()]
-    create_table_sql = f"""
-    CREATE TABLE IF NOT EXISTS {table_name} (
-        {', '.join(columns)}
-    );
-    """
-    postgres_hook.run(create_table_sql)
+    try:
+        # Create table
+        columns = [f"{col} {dtype}" for col, dtype in schema_class.table_schema.items()]
+        create_table_sql = f"""
+        CREATE TABLE IF NOT EXISTS {table_name} (
+            {', '.join(columns)}
+        );
+        """
+        postgres_hook.run(create_table_sql)
 
-    # Create indexes
-    for index_sql in schema_class.indexes:
-        postgres_hook.run(index_sql)
+        # Create indexes with IF NOT EXISTS
+        for index_sql in schema_class.indexes:
+            # Add IF NOT EXISTS to index creation
+            if "CREATE INDEX" in index_sql:
+                index_sql = index_sql.replace("CREATE INDEX", "CREATE INDEX IF NOT EXISTS")
+            postgres_hook.run(index_sql)
+            
+    except Exception as e:
+        raise AirflowException(f"Failed to create schema and table: {str(e)}")
 
 
 def batch_insert_data(postgres_hook: PostgresHook, df: pd.DataFrame, table_name: str) -> None:
