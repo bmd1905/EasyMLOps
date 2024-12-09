@@ -2,13 +2,13 @@ import logging
 from datetime import timedelta
 
 import pendulum
-from airflow.decorators import dag, task
-from airflow.exceptions import AirflowException
-
-from config.minio_config import MinioConfig
+from config.data_pipeline_config import DataPipelineConfig
 from tasks.minio_tasks import check_minio_connection, load_from_minio
 from tasks.postgres_tasks import check_postgres_connection, save_to_postgres
 from tasks.transform_tasks import transform_data
+
+from airflow.decorators import dag, task
+from airflow.exceptions import AirflowException
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -34,26 +34,26 @@ def check_prerequisites(postgres_ok: bool, minio_ok: bool) -> None:
 
 
 @dag(
-    dag_id="minio_data_pipeline",
+    dag_id="data_pipeline",
     default_args=default_args,
-    description="ETL pipeline from MinIO to PostgreSQL",
+    description="Data pipeline from Data Lake to Data Warehouse",
     schedule="@hourly",
     start_date=pendulum.datetime(2024, 1, 1, tz="UTC"),
     catchup=False,
-    tags=["minio", "etl"],
+    tags=["data_lake", "data_warehouse"],
 )
-def minio_etl():
+def data_pipeline():
     """
-    ### MinIO ETL Pipeline
+    ### Data Pipeline
 
     This pipeline:
-    1. Loads all JSON data from MinIO
+    1. Loads all JSON data from Data Lake
     2. Transforms the data by adding processing metadata
-    3. Saves the processed data to PostgreSQL DWH
+    3. Saves the processed data to Data Warehouse
     """
 
     # Load configuration
-    config = MinioConfig.from_airflow_variables()
+    config = DataPipelineConfig.from_airflow_variables()
 
     # Run connection checks
     postgres_check = check_postgres_connection()
@@ -72,4 +72,4 @@ def minio_etl():
 
 
 # Create DAG instance
-minio_etl_dag = minio_etl()
+data_pipeline_dag = data_pipeline()

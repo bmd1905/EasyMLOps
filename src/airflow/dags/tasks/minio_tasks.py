@@ -1,7 +1,7 @@
 import json
 from typing import Any, Dict
 
-from config.minio_config import MinioConfig
+from config.data_pipeline_config import DataPipelineConfig
 from utils.error_handling import MinioError
 
 from airflow.decorators import task
@@ -20,7 +20,7 @@ def check_minio_connection() -> bool:
 
 
 @task()
-def load_from_minio(config: MinioConfig) -> Dict[str, Any]:
+def load_from_minio(config: DataPipelineConfig) -> Dict[str, Any]:
     """Load data from MinIO"""
     try:
         s3_hook = S3Hook(aws_conn_id="minio_conn")

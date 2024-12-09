@@ -3,7 +3,7 @@ from airflow.models import Variable
 
 
 @dataclass
-class MinioConfig:
+class DataPipelineConfig:
     bucket_name: str
     path_prefix: str
     schema_registry_url: str
