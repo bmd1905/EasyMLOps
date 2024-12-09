@@ -12,9 +12,8 @@ from tasks.bronze.validate_raw_data import validate_raw_data
 from tasks.gold.load_to_dwh import load_dimensions_and_facts
 from tasks.silver.transform_data import transform_data
 
-from airflow.decorators import dag, task, task_group
+from airflow.decorators import dag, task
 from airflow.exceptions import AirflowException
-from airflow.sensors.external_task_sensor import ExternalTaskSensor
 from airflow.utils.task_group import TaskGroup
 
 logging.basicConfig(level=logging.INFO)
