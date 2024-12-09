@@ -65,26 +65,37 @@ def load_dimensions_and_facts(transformed_data: Dict[str, Any]) -> bool:
         postgres_hook = PostgresHook(postgres_conn_id="postgres_dwh")
         df = pd.DataFrame(transformed_data["data"])
 
+        # Create schema if not exists
+        postgres_hook.run("CREATE SCHEMA IF NOT EXISTS dwh;")
+
         # Create dimensions
         dims = {
-            "dim_user": create_dim_user(df),
-            "dim_product": create_dim_product(df),
-            "dim_category": create_dim_category(df),
-            "dim_date": create_dim_date(df),
+            "dwh.dim_user": create_dim_user(df),
+            "dwh.dim_product": create_dim_product(df),
+            "dwh.dim_category": create_dim_category(df),
+            "dwh.dim_date": create_dim_date(df),
+        }
+
+        # Map table names to schema classes
+        schema_mapping = {
+            "dwh.dim_user": DimUserSchema,
+            "dwh.dim_product": DimProductSchema,
+            "dwh.dim_category": DimCategorySchema,
+            "dwh.dim_date": DimDateSchema,
         }
 
         # Create fact table
         fact_events = create_fact_events(df, dims)
 
-        # Create schemas and tables
+        # Create and load dimension tables
         for table_name, dim_df in dims.items():
-            schema_class = globals()[f"{table_name.title()}Schema"]
+            schema_class = schema_mapping[table_name]
             create_schema_and_table(postgres_hook, schema_class, table_name)
             batch_insert_data(postgres_hook, dim_df, table_name)
 
         # Create and load fact table
-        create_schema_and_table(postgres_hook, FactEventSchema, "fact_events")
-        batch_insert_data(postgres_hook, fact_events, "fact_events")
+        create_schema_and_table(postgres_hook, FactEventSchema, "dwh.fact_events")
+        batch_insert_data(postgres_hook, fact_events, "dwh.fact_events")
 
         # Create useful views
         create_analytical_views(postgres_hook)
@@ -98,8 +109,8 @@ def load_dimensions_and_facts(transformed_data: Dict[str, Any]) -> bool:
 def create_analytical_views(postgres_hook: PostgresHook) -> None:
     """Create useful views for analysis"""
     views = {
-        "vw_user_session_summary": """
-            CREATE OR REPLACE VIEW vw_user_session_summary AS
+        "dwh.vw_user_session_summary": """
+            CREATE OR REPLACE VIEW dwh.vw_user_session_summary AS
             SELECT 
                 u.user_id,
                 f.user_session,
@@ -107,14 +118,14 @@ def create_analytical_views(postgres_hook: PostgresHook) -> None:
                 MIN(d.event_timestamp) as session_start,
                 MAX(d.event_timestamp) as session_end,
                 COUNT(DISTINCT p.product_id) as unique_products_viewed
-            FROM fact_events f
-            JOIN dim_user u ON f.user_id = u.user_id
-            JOIN dim_date d ON f.event_date = d.event_date
-            JOIN dim_product p ON f.product_id = p.product_id
+            FROM dwh.fact_events f
+            JOIN dwh.dim_user u ON f.user_id = u.user_id
+            JOIN dwh.dim_date d ON f.event_date = d.event_date
+            JOIN dwh.dim_product p ON f.product_id = p.product_id
             GROUP BY u.user_id, f.user_session
         """,
-        "vw_category_performance": """
-            CREATE OR REPLACE VIEW vw_category_performance AS
+        "dwh.vw_category_performance": """
+            CREATE OR REPLACE VIEW dwh.vw_category_performance AS
             SELECT 
                 c.category_l1,
                 c.category_l2,
@@ -122,10 +133,10 @@ def create_analytical_views(postgres_hook: PostgresHook) -> None:
                 COUNT(*) as view_count,
                 COUNT(DISTINCT u.user_id) as unique_users,
                 AVG(p.price) as avg_price
-            FROM fact_events f
-            JOIN dim_category c ON f.category_id = c.category_id
-            JOIN dim_user u ON f.user_id = u.user_id
-            JOIN dim_product p ON f.product_id = p.product_id
+            FROM dwh.fact_events f
+            JOIN dwh.dim_category c ON f.category_id = c.category_id
+            JOIN dwh.dim_user u ON f.user_id = u.user_id
+            JOIN dwh.dim_product p ON f.product_id = p.product_id
             GROUP BY c.category_l1, c.category_l2, c.category_l3
         """,
     }
