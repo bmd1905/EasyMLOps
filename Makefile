@@ -10,16 +10,16 @@ PYTHON := python3
 
 # Data Ingestion and Streaming Tests
 producer:
-	$(PYTHON) src/producer/produce.py -b=localhost:9092 -s=http://localhost:8081
+	uv run $(PYTHON) src/producer/produce.py -b=localhost:9092 -s=http://localhost:8081
 
 consumer:
-	$(PYTHON) -m src.streaming.main schema_validation
+	uv run $(PYTHON) -m src.streaming.main schema_validation
 
 deploy_s3_connector:
-	$(PYTHON) -m src.streaming.connectors.deploy_s3_connector
+	uv run $(PYTHON) -m src.streaming.connectors.deploy_s3_connector
 
 alert_invalid_events:
-	$(PYTHON) -m src.streaming.main alert_invalid_events
+	uv run $(PYTHON) -m src.streaming.main alert_invalid_events
 
 
 # Docker Compose Commands
@@ -99,3 +99,8 @@ help:
 	@echo "  make restart         - Restart all services"
 	@echo "  make clean           - Remove all containers and volumes"
 	@echo "  make logs-<service>  - View logs for specific service"
+
+
+# ------------------- Ray Commands -------------------
+load_data:
+	uv run python3 -m src.training.load_data
