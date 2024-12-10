@@ -99,8 +99,3 @@ help:
 	@echo "  make restart         - Restart all services"
 	@echo "  make clean           - Remove all containers and volumes"
 	@echo "  make logs-<service>  - View logs for specific service"
-
-
-# ------------------- Ray Commands -------------------
-load_data:
-	uv run python3 -m src.training.load_data
