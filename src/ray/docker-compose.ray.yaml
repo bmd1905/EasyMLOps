@@ -1,69 +1,45 @@
-x-ray-worker: &ray-worker
-  image: rayproject/ray:2.9.0
-  command: >
-    ray start
-    --address=ray-head:6379
-    --block
-  environment:
-    RAY_memory_monitor_refresh_ms: "0"
-    RAY_OBJECT_STORE_ALLOW_SLOW_STORAGE: "1"
-  volumes:
-    - ray-data:/tmp/ray
-  networks:
-    - easydatapipeline_default
-  user: "0:0"  # Run as root to avoid permission issues
+version: "3"
 
 services:
   ray-head:
-    image: rayproject/ray:2.9.0
+    image: ${RAY_IMAGE}
     ports:
-      - "8265:8265"  # Ray dashboard
-      - "10001:10001"  # Ray client server
-      - "6379:6379"  # Ray internal communication
-    command: >
-      bash -c "
-      mkdir -p /tmp/ray &&
-      chmod 777 /tmp/ray &&
-      ray start --head
-      --port=6379
-      --dashboard-port=8265
-      --dashboard-host=0.0.0.0
-      --include-dashboard=true
-      --block"
-    environment:
-      RAY_memory_monitor_refresh_ms: "0"
-      RAY_OBJECT_STORE_ALLOW_SLOW_STORAGE: "1"
-    volumes:
-      - ray-data:/tmp/ray
+      - "${REDISPORT}:${REDISPORT}"
+      - "${DASHBOARDPORT}:${DASHBOARDPORT}"
+      - "${HEADNODEPORT}:${HEADNODEPORT}"
+    env_file:
+      - .env
+    command: bash -c "ray start --head --dashboard-port=${DASHBOARDPORT} --port=${REDISPORT} --dashboard-host=0.0.0.0 --redis-password=${REDISPASSWORD} --block"
+    shm_size: 2g
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: '2g'
     networks:
-      - easydatapipeline_default
-    healthcheck:
-      test: ["CMD", "ray", "status"]
-      interval: 10s
-      timeout: 10s
-      retries: 5
-    user: "0:0"  # Run as root to avoid permission issues
+      - ray_net
 
-  ray-worker-1:
-    <<: *ray-worker
+  ray-worker:
+    image: ${RAY_IMAGE}
     depends_on:
-      ray-head:
-        condition: service_healthy
-
-  ray-worker-2:
-    <<: *ray-worker
-    depends_on:
-      ray-head:
-        condition: service_healthy
-
-volumes:
-  ray-data:
-    driver: local
-    driver_opts:
-      type: none
-      device: /tmp/ray  # Host path
-      o: bind
+      - ray-head
+    env_file:
+      - .env
+    command: bash -c "ray start --address=ray-head:${REDISPORT} --redis-password=${REDISPASSWORD} --num-cpus=${NUM_CPU_WORKER} --block"
+    shm_size: 2g
+    deploy:
+      mode: replicated
+      replicas: ${NUM_WORKERS}
+      resources:
+        limits:
+          cpus: ${NUM_CPU_WORKER}
+          memory: '2g'
+    networks:
+      - ray_net
 
 networks:
-  easydatapipeline_default:
-    external: true
+  ray_net:
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.63.0.0/16
