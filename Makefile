@@ -27,16 +27,16 @@ up-network:
 	docker network create easydatapipeline_default
 
 up-kafka:
-	docker compose -f $(KAFKA_COMPOSE_FILE) up -d
+	docker compose -f $(KAFKA_COMPOSE_FILE) up -d --build
 
 up-airflow:
-	docker compose -f $(AIRFLOW_COMPOSE_FILE) up -d
+	docker compose -f $(AIRFLOW_COMPOSE_FILE) up -d --build
 
 up-minio:
-	docker compose -f $(MINIO_COMPOSE_FILE) up -d
+	docker compose -f $(MINIO_COMPOSE_FILE) up -d --build
 
 up-dwh:
-	docker compose -f $(DWH_COMPOSE_FILE) up -d
+	docker compose -f $(DWH_COMPOSE_FILE) up -d --build
 
 down-kafka:
 	docker compose -f $(KAFKA_COMPOSE_FILE) down
