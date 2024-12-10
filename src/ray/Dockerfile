@@ -1,4 +1,20 @@
 FROM rayproject/ray:2.9.0-py39
 
-# No need for additional installations since the base image has everything we need
+USER root
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+USER ray
+
+# Install specific versions of packages known to work together
+RUN pip install --no-cache-dir \
+    'pyOpenSSL==23.2.0' \
+    'cryptography==41.0.7' \
+    'urllib3<2.0.0' \
+    'tensorboardX==2.6.2' \
+    'boto3>=1.34.90'
+
 CMD ["bash", "-c", "ray start --head --num-cpus 1 --dashboard-host 0.0.0.0 --include-dashboard true --block"]

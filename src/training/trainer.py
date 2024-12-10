@@ -1,4 +1,5 @@
 from loguru import logger
+
 from ray.train import CheckpointConfig, FailureConfig, RunConfig, ScalingConfig
 from ray.train.xgboost import XGBoostTrainer
 
@@ -24,10 +25,7 @@ def train_model(train_dataset, valid_dataset):
         scaling_config=ScalingConfig(
             num_workers=1,  # Single worker for stability
             use_gpu=False,
-            resources_per_worker={
-                "CPU": 1,
-                "memory": 2 * 1024 * 1024 * 1024,  # 2GB per worker
-            },
+            resources_per_worker={"CPU": 1},  # Only specify CPU resources
         ),
         label_column="is_purchased",
         num_boost_round=20,
@@ -39,6 +37,15 @@ def train_model(train_dataset, valid_dataset):
             "eta": 0.3,
             "subsample": 0.8,
             "colsample_bytree": 0.8,
+            # Add network configuration
+            "xgboost_ray": {
+                "ray_params": {
+                    "elastic_training": False,
+                    "max_failed_actors": 0,
+                    "max_actor_restarts": 0,
+                    "placement_options": {"skip_placement": True},
+                }
+            },
         },
         datasets={"train": train_dataset, "valid": valid_dataset},
     )

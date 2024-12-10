@@ -1,23 +1,43 @@
 import logging
 from datetime import timedelta
-from typing import Any, Dict, Tuple
+from pathlib import Path
+from typing import Any, Dict
 
 import pandas as pd
 import pendulum
 from common.scripts.monitoring import PipelineMonitoring
+from ray_provider.decorators import ray
 
-import ray
 from airflow.decorators import dag, task
 from airflow.exceptions import AirflowException
 from airflow.providers.postgres.hooks.postgres import PostgresHook
-from ray.train import CheckpointConfig, FailureConfig, RunConfig, ScalingConfig
-from ray.train.xgboost import XGBoostTrainer
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Ray cluster configuration
-RAY_ADDRESS = "ray://ray-head:10001"
+# Ray configuration
+CONN_ID = "ray_conn"
+FOLDER_PATH = Path(__file__).parent / "ray_scripts"
+RAY_TASK_CONFIG = {
+    "conn_id": CONN_ID,
+    "runtime_env": {
+        "working_dir": str(FOLDER_PATH),
+        "pip": [
+            "ray[train]==2.9.0",
+            "xgboost-ray==0.1.19",
+            "pandas==1.3.0",
+            "astro-provider-ray==0.3.0",
+            "boto3>=1.34.90",
+            "pyOpenSSL==23.2.0",
+            "cryptography==41.0.7",
+            "urllib3<2.0.0",
+            "tensorboardX==2.6.2",
+        ],
+    },
+    "num_cpus": 3,
+    "num_gpus": 0,
+    "poll_interval": 5,
+}
 
 default_args = {
     "owner": "airflow",
@@ -34,27 +54,7 @@ default_args = {
 
 
 @task()
-def connect_ray() -> None:
-    """Connect to Ray cluster"""
-    try:
-        ray.init(address=RAY_ADDRESS)
-        logger.info("Successfully connected to Ray cluster")
-    except Exception as e:
-        raise AirflowException(f"Failed to connect to Ray cluster: {e}")
-
-
-@task()
-def disconnect_ray():
-    """Disconnect from Ray cluster"""
-    try:
-        ray.shutdown()
-        logger.info("Successfully disconnected from Ray cluster")
-    except Exception as e:
-        logger.warning(f"Ray disconnect warning: {e}")
-
-
-@task()
-def load_training_data() -> ray.data.Dataset:
+def load_training_data() -> Dict[str, Any]:
     """Load training data from DWH"""
     try:
         postgres_hook = PostgresHook(postgres_conn_id="postgres_dwh")
@@ -76,7 +76,6 @@ def load_training_data() -> ray.data.Dataset:
 
         # Data preprocessing
         df["price"] = df["price"].astype(float)
-
         categorical_columns = [
             "brand",
             "event_weekday",
@@ -86,34 +85,32 @@ def load_training_data() -> ray.data.Dataset:
         for col in categorical_columns:
             df[col] = pd.Categorical(df[col]).codes
 
-        return ray.data.from_pandas(df)
+        # Return as dictionary with 'data' key
+        return {"data": df.to_dict(orient="records")}
     except Exception as e:
         raise AirflowException(f"Failed to load training data: {e}")
 
 
-@task()
-def prepare_datasets(
-    dataset: ray.data.Dataset,
-) -> Tuple[ray.data.Dataset, ray.data.Dataset]:
-    """Prepare training and validation datasets"""
-    try:
-        # Remove nulls
-        dataset = dataset.filter(lambda x: x is not None)
+@ray.task(config=RAY_TASK_CONFIG)
+def train_model_with_ray(data):
+    """Train XGBoost model using Ray"""
+    import pandas as pd
 
-        # Split data
+    import ray
+    from airflow.exceptions import AirflowException
+    from ray.train import CheckpointConfig, FailureConfig, RunConfig, ScalingConfig
+    from ray.train.xgboost import XGBoostTrainer
+
+    try:
+        # Convert data back to Ray dataset - now access the 'data' key
+        df = pd.DataFrame(data["data"])
+        dataset = ray.data.from_pandas(df)
+
+        # Remove nulls and split data
+        dataset = dataset.filter(lambda x: x is not None)
         train_dataset, valid_dataset = dataset.train_test_split(test_size=0.3)
 
-        return train_dataset, valid_dataset
-    except Exception as e:
-        raise AirflowException(f"Failed to prepare datasets: {e}")
-
-
-@task()
-def train_model(datasets: Tuple[ray.data.Dataset, ray.data.Dataset]) -> Dict[str, Any]:
-    """Train XGBoost model"""
-    try:
-        train_dataset, valid_dataset = datasets
-
+        # Configure training
         run_config = RunConfig(
             checkpoint_config=CheckpointConfig(
                 checkpoint_frequency=1,
@@ -130,10 +127,7 @@ def train_model(datasets: Tuple[ray.data.Dataset, ray.data.Dataset]) -> Dict[str
             scaling_config=ScalingConfig(
                 num_workers=1,
                 use_gpu=False,
-                resources_per_worker={
-                    "CPU": 1,
-                    "memory": 2 * 1024 * 1024 * 1024,
-                },
+                resources_per_worker={"CPU": 2},
             ),
             label_column="is_purchased",
             num_boost_round=20,
@@ -145,6 +139,14 @@ def train_model(datasets: Tuple[ray.data.Dataset, ray.data.Dataset]) -> Dict[str
                 "eta": 0.3,
                 "subsample": 0.8,
                 "colsample_bytree": 0.8,
+                "xgboost_ray": {
+                    "ray_params": {
+                        "elastic_training": False,
+                        "max_failed_actors": 0,
+                        "max_actor_restarts": 0,
+                        "placement_options": {"skip_placement": True},
+                    }
+                },
             },
             datasets={"train": train_dataset, "valid": valid_dataset},
         )
@@ -156,7 +158,6 @@ def train_model(datasets: Tuple[ray.data.Dataset, ray.data.Dataset]) -> Dict[str
         PipelineMonitoring.log_metrics(
             {"training_metrics": metrics, "model_version": result.checkpoint.path}
         )
-
         return metrics
 
     except Exception as e:
@@ -176,21 +177,11 @@ def training_pipeline():
     ### ML Training Pipeline
     This DAG handles the end-to-end training process using a dedicated Ray cluster
     """
-    # Connect to Ray cluster
-    ray_connect = connect_ray()
+    # Load data
+    data = load_training_data()
 
-    # Load and prepare data
-    dataset = load_training_data()
-    train_valid_datasets = prepare_datasets(dataset)
-
-    # Train model
-    metrics = train_model(train_valid_datasets)
-
-    # Disconnect
-    ray_disconnect = disconnect_ray()
-
-    # Define dependencies
-    ray_connect >> dataset >> train_valid_datasets >> metrics >> ray_disconnect
+    # Train model using Ray
+    metrics = train_model_with_ray(data)  # noqa: F841
 
 
 # Create DAG instance

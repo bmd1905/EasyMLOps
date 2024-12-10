@@ -1,4 +1,4 @@
-FROM apache/airflow:2.10.3
+FROM apache/airflow:2.10.3-python3.9
 
 USER root
 
@@ -14,6 +14,9 @@ RUN apt-get update \
 
 USER airflow
 
-# Install Python packages
+# First install setuptools to ensure pkg_resources is available
+RUN pip install --no-cache-dir setuptools==69.0.3
+
+# Then install Python packages
 COPY requirements.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.txt

@@ -1,8 +1,8 @@
-version: "3"
-
 services:
   ray-head:
-    image: ${RAY_IMAGE}
+    build:
+      context: .
+      dockerfile: Dockerfile
     ports:
       - "${REDISPORT}:${REDISPORT}"
       - "${DASHBOARDPORT}:${DASHBOARDPORT}"
@@ -14,36 +14,31 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '1'
-          memory: '2g'
+          cpus: '4'
+          memory: '8g'
     networks:
-      - ray_net
       - easydatapipeline_default
 
   ray-worker:
-    image: ${RAY_IMAGE}
+    build:
+      context: .
+      dockerfile: Dockerfile
     depends_on:
       - ray-head
     env_file:
       - .env
-    command: bash -c "ray start --address=ray-head:${REDISPORT} --redis-password=${REDISPASSWORD} --num-cpus=${NUM_CPU_WORKER} --block"
+    command: bash -c "ray start --address=ray-head:${REDISPORT} --redis-password=${REDISPASSWORD} --num-cpus="10" --block"
     shm_size: 2g
     deploy:
       mode: replicated
-      replicas: ${NUM_WORKERS}
+      replicas: 1
       resources:
         limits:
-          cpus: ${NUM_CPU_WORKER}
-          memory: '2g'
+          cpus: '10'
+          memory: '12g'
     networks:
-      - ray_net
       - easydatapipeline_default
 
 networks:
-  ray_net:
-    ipam:
-      driver: default
-      config:
-        - subnet: 172.63.0.0/16
   easydatapipeline_default:
     external: true

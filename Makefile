@@ -44,19 +44,19 @@ up-ray-cluster:
 	docker compose -f $(RAY_COMPOSE_FILE) up -d --build
 
 down-kafka:
-	docker compose -f $(KAFKA_COMPOSE_FILE) down
+	docker compose -f $(KAFKA_COMPOSE_FILE) down -v
 
 down-airflow:
-	docker compose -f $(AIRFLOW_COMPOSE_FILE) down
+	docker compose -f $(AIRFLOW_COMPOSE_FILE) down -v
 
 down-minio:
-	docker compose -f $(MINIO_COMPOSE_FILE) down
+	docker compose -f $(MINIO_COMPOSE_FILE) down -v
 
 down-dwh:
-	docker compose -f $(DWH_COMPOSE_FILE) down
+	docker compose -f $(DWH_COMPOSE_FILE) down -v
 
 down-ray-cluster:
-	docker compose -f $(RAY_COMPOSE_FILE) down
+	docker compose -f $(RAY_COMPOSE_FILE) down -v
 
 restart-kafka: down-kafka up-kafka
 restart-airflow: down-airflow up-airflow

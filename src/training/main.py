@@ -1,9 +1,10 @@
 import json
 
-import ray
 from data_loader import load_data
 from preprocessor import remove_nulls, split_data
 from trainer import train_model
+
+import ray
 
 
 def init_ray():
@@ -12,6 +13,8 @@ def init_ray():
         "env_vars": {
             "RAY_memory_monitor_refresh_ms": "0",
             "RAY_OBJECT_STORE_ALLOW_SLOW_STORAGE": "1",
+            "RAY_ADDRESS": "ray-head:6379",
+            "RAY_DISABLE_DOCKER_CPU_WARNING": "1",
         }
     }
 
@@ -21,10 +24,10 @@ def init_ray():
             _system_config={
                 "object_spilling_config": json.dumps(
                     {"type": "filesystem", "params": {"directory_path": "/tmp/spill"}}
-                )
+                ),
+                "distributed_connect_timeout_s": 30,
+                "distributed_connect_num_retries": 3,
             },
-            object_store_memory=4 * 1024 * 1024 * 1024,  # 4GB
-            _memory=8 * 1024 * 1024 * 1024,  # 8GB
         )
     except Exception as e:
         print(f"Ray initialization error: {e}")
