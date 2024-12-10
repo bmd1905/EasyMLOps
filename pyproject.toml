@@ -3,7 +3,7 @@ name = "easydatapipeline"
 version = "0.1.0"
 description = "A simple data pipeline project"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.9.18"
 dependencies = [
     "apache-flink==1.17.1",
     "avro-python3==1.8.1",
@@ -14,7 +14,7 @@ dependencies = [
     "pyarrow==8.0.0",
     "pydantic-settings==2.0.2",
     "python-schema-registry-client==2.4.1",
-    "ray[data,serve,train,tune]>=2.39.0",
+    "ray[data,serve,train,tune]==2.9.0",
     "setuptools>=75.6.0",
     "sqlalchemy==2.0.36",
     "tqdm>=4.67.1",
