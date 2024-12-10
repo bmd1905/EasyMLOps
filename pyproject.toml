@@ -1,0 +1,20 @@
+[project]
+name = "easydatapipeline"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "apache-flink>=1.20.0",
+    "avro-python3>=1.10.2",
+    "boto3>=1.35.77",
+    "kafka-python>=2.0.2",
+    "loguru>=0.7.3",
+    "pandas>=2.1.0",
+    "psycopg2-binary>=2.9.10",
+    "pyarrow>=11.0.0",
+    "pydantic-settings>=2.6.1",
+    "python-schema-registry-client>=2.6.0",
+    "ray[data,serve,train,tune]>=2.40.0",
+    "sqlalchemy>=2.0.36",
+]
