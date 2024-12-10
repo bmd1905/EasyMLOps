@@ -71,7 +71,7 @@ def create_streams(servers, avro_schemas_path, schema_registry_client):
         try:
             producer = KafkaProducer(
                 bootstrap_servers=servers,
-                value_serializer=str.encode  # Simple string encoding
+                value_serializer=str.encode,  # Simple string encoding
             )
             admin = KafkaAdminClient(bootstrap_servers=servers)
             print("SUCCESS: instantiated Kafka admin and producer")
@@ -158,11 +158,11 @@ def create_streams(servers, avro_schemas_path, schema_registry_client):
 
             # Convert to JSON string before sending
             json_str = json.dumps(formatted_record)
-            
+
             # Send JSON string directly to Kafka
             producer.send(topic_name, value=json_str)
             print(f"Sent record: {index}")
-            sleep(0.5)  # Small delay between messages
+            sleep(0.1)  # Small delay between messages
 
         except Exception as e:
             print(f"Error processing record: {e}")
@@ -191,7 +191,7 @@ if __name__ == "__main__":
         try:
             teardown_stream(OUTPUT_TOPICS, [servers])
         except Exception as e:
-            print(f"Topic device_{device_id} does not exist. Skipping...!")
+            print(f"Topic device_{device_id} does not exist. Skipping...! {e}")
 
     if mode == "setup":
         avro_schemas_path = parsed_args["avro_schemas_path"]

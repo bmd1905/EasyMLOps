@@ -184,6 +184,9 @@ class SchemaValidationJob(FlinkJob):
         return "schema_validation"
 
     def create_pipeline(self, env: StreamExecutionEnvironment):
+        # Set parallelism
+        env.set_parallelism(4)
+
         # Add required JARs
         env.add_jars(
             f"file://{self.jars_path}/flink-connector-kafka-1.17.1.jar",
