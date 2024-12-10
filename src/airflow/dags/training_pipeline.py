@@ -5,7 +5,6 @@ from typing import Any, Dict
 
 import pandas as pd
 import pendulum
-from common.scripts.monitoring import PipelineMonitoring
 from ray_provider.decorators import ray
 
 from airflow.decorators import dag, task
@@ -24,7 +23,8 @@ RAY_TASK_CONFIG = {
         "working_dir": str(FOLDER_PATH),
         "pip": [
             "ray[train]==2.9.0",
-            "xgboost-ray==0.1.19",
+            "xgboost_ray==0.1.19",
+            "xgboost==2.0.3",
             "pandas==1.3.0",
             "astro-provider-ray==0.3.0",
             "boto3>=1.34.90",
@@ -32,11 +32,13 @@ RAY_TASK_CONFIG = {
             "cryptography==41.0.7",
             "urllib3<2.0.0",
             "tensorboardX==2.6.2",
+            "pyarrow",
         ],
     },
     "num_cpus": 3,
     "num_gpus": 0,
     "poll_interval": 5,
+    "xcom_task_key": "dashboard",
 }
 
 default_args = {
@@ -95,6 +97,7 @@ def load_training_data() -> Dict[str, Any]:
 def train_model_with_ray(data):
     """Train XGBoost model using Ray"""
     import pandas as pd
+    import pyarrow.fs
 
     import ray
     from airflow.exceptions import AirflowException
@@ -110,8 +113,18 @@ def train_model_with_ray(data):
         dataset = dataset.filter(lambda x: x is not None)
         train_dataset, valid_dataset = dataset.train_test_split(test_size=0.3)
 
+        # MinIO
+        fs = pyarrow.fs.S3FileSystem(
+            endpoint_override="http://minio:9000",
+            access_key="minioadmin",
+            secret_key="minioadmin",
+        )
+
         # Configure training
         run_config = RunConfig(
+            storage_filesystem=fs,
+            storage_path="model-checkpoints-bucket/xgb_model",
+            name="xgb_model_training",
             checkpoint_config=CheckpointConfig(
                 checkpoint_frequency=1,
                 num_to_keep=1,
@@ -125,7 +138,7 @@ def train_model_with_ray(data):
         trainer = XGBoostTrainer(
             run_config=run_config,
             scaling_config=ScalingConfig(
-                num_workers=1,
+                num_workers=2,
                 use_gpu=False,
                 resources_per_worker={"CPU": 2},
             ),
@@ -152,13 +165,9 @@ def train_model_with_ray(data):
         )
 
         result = trainer.fit()
-        metrics = result.metrics
 
-        # Log metrics
-        PipelineMonitoring.log_metrics(
-            {"training_metrics": metrics, "model_version": result.checkpoint.path}
-        )
-        return metrics
+        # Return metrics and checkpoint path explicitly
+        return {"metrics": result.metrics, "checkpoint_path": result.checkpoint.path}
 
     except Exception as e:
         raise AirflowException(f"Model training failed: {e}")
@@ -181,7 +190,7 @@ def training_pipeline():
     data = load_training_data()
 
     # Train model using Ray
-    metrics = train_model_with_ray(data)  # noqa: F841
+    train_model_with_ray(data)
 
 
 # Create DAG instance

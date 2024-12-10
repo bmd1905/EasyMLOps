@@ -4,12 +4,12 @@ services:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "${REDISPORT}:${REDISPORT}"
-      - "${DASHBOARDPORT}:${DASHBOARDPORT}"
-      - "${HEADNODEPORT}:${HEADNODEPORT}"
+      - "6379:6379"
+      - "8265:8265"
+      - "10001:10001"
     env_file:
       - .env
-    command: bash -c "ray start --head --dashboard-port=${DASHBOARDPORT} --port=${REDISPORT} --dashboard-host=0.0.0.0 --redis-password=${REDISPASSWORD} --block"
+    command: bash -c "ray start --head --dashboard-port=8265 --port=6379 --dashboard-host=0.0.0.0 --redis-password=your_password --block"
     shm_size: 2g
     deploy:
       resources:
@@ -27,7 +27,7 @@ services:
       - ray-head
     env_file:
       - .env
-    command: bash -c "ray start --address=ray-head:${REDISPORT} --redis-password=${REDISPASSWORD} --num-cpus="10" --block"
+    command: bash -c "ray start --address=ray-head:6379 --redis-password=your_password --num-cpus="10" --block"
     shm_size: 2g
     deploy:
       mode: replicated
