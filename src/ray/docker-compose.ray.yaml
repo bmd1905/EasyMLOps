@@ -45,5 +45,5 @@ networks:
       driver: default
       config:
         - subnet: 172.63.0.0/16
-  asydatapipeline_default:
+  easydatapipeline_default:
     external: true
