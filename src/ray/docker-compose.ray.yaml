@@ -1,0 +1,69 @@
+x-ray-worker: &ray-worker
+  image: rayproject/ray:2.9.0
+  command: >
+    ray start
+    --address=ray-head:6379
+    --block
+  environment:
+    RAY_memory_monitor_refresh_ms: "0"
+    RAY_OBJECT_STORE_ALLOW_SLOW_STORAGE: "1"
+  volumes:
+    - ray-data:/tmp/ray
+  networks:
+    - easydatapipeline_default
+  user: "0:0"  # Run as root to avoid permission issues
+
+services:
+  ray-head:
+    image: rayproject/ray:2.9.0
+    ports:
+      - "8265:8265"  # Ray dashboard
+      - "10001:10001"  # Ray client server
+      - "6379:6379"  # Ray internal communication
+    command: >
+      bash -c "
+      mkdir -p /tmp/ray &&
+      chmod 777 /tmp/ray &&
+      ray start --head
+      --port=6379
+      --dashboard-port=8265
+      --dashboard-host=0.0.0.0
+      --include-dashboard=true
+      --block"
+    environment:
+      RAY_memory_monitor_refresh_ms: "0"
+      RAY_OBJECT_STORE_ALLOW_SLOW_STORAGE: "1"
+    volumes:
+      - ray-data:/tmp/ray
+    networks:
+      - easydatapipeline_default
+    healthcheck:
+      test: ["CMD", "ray", "status"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+    user: "0:0"  # Run as root to avoid permission issues
+
+  ray-worker-1:
+    <<: *ray-worker
+    depends_on:
+      ray-head:
+        condition: service_healthy
+
+  ray-worker-2:
+    <<: *ray-worker
+    depends_on:
+      ray-head:
+        condition: service_healthy
+
+volumes:
+  ray-data:
+    driver: local
+    driver_opts:
+      type: none
+      device: /tmp/ray  # Host path
+      o: bind
+
+networks:
+  easydatapipeline_default:
+    external: true

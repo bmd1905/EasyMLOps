@@ -1,21 +1,23 @@
-import json
 import logging
 from datetime import timedelta
 from typing import Any, Dict, Tuple
 
 import pandas as pd
 import pendulum
-import ray
 from common.scripts.monitoring import PipelineMonitoring
-from ray.train import CheckpointConfig, FailureConfig, RunConfig, ScalingConfig
-from ray.train.xgboost import XGBoostTrainer
 
+import ray
 from airflow.decorators import dag, task
 from airflow.exceptions import AirflowException
 from airflow.providers.postgres.hooks.postgres import PostgresHook
+from ray.train import CheckpointConfig, FailureConfig, RunConfig, ScalingConfig
+from ray.train.xgboost import XGBoostTrainer
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Ray cluster configuration
+RAY_ADDRESS = "ray://ray-head:10001"
 
 default_args = {
     "owner": "airflow",
@@ -32,28 +34,23 @@ default_args = {
 
 
 @task()
-def init_ray() -> None:
-    """Initialize Ray with proper configuration"""
-    runtime_env = {
-        "env_vars": {
-            "RAY_memory_monitor_refresh_ms": "0",
-            "RAY_OBJECT_STORE_ALLOW_SLOW_STORAGE": "1",
-        }
-    }
-
+def connect_ray() -> None:
+    """Connect to Ray cluster"""
     try:
-        ray.init(
-            runtime_env=runtime_env,
-            _system_config={
-                "object_spilling_config": json.dumps(
-                    {"type": "filesystem", "params": {"directory_path": "/tmp/spill"}}
-                )
-            },
-            object_store_memory=4 * 1024 * 1024 * 1024,  # 4GB
-            _memory=8 * 1024 * 1024 * 1024,  # 8GB
-        )
+        ray.init(address=RAY_ADDRESS)
+        logger.info("Successfully connected to Ray cluster")
     except Exception as e:
-        raise AirflowException(f"Ray initialization error: {e}")
+        raise AirflowException(f"Failed to connect to Ray cluster: {e}")
+
+
+@task()
+def disconnect_ray():
+    """Disconnect from Ray cluster"""
+    try:
+        ray.shutdown()
+        logger.info("Successfully disconnected from Ray cluster")
+    except Exception as e:
+        logger.warning(f"Ray disconnect warning: {e}")
 
 
 @task()
@@ -166,15 +163,6 @@ def train_model(datasets: Tuple[ray.data.Dataset, ray.data.Dataset]) -> Dict[str
         raise AirflowException(f"Model training failed: {e}")
 
 
-@task()
-def cleanup_ray():
-    """Cleanup Ray resources"""
-    try:
-        ray.shutdown()
-    except Exception as e:
-        logger.warning(f"Ray cleanup warning: {e}")
-
-
 @dag(
     dag_id="training_pipeline",
     default_args=default_args,
@@ -186,15 +174,10 @@ def cleanup_ray():
 def training_pipeline():
     """
     ### ML Training Pipeline
-
-    This DAG handles the end-to-end training process:
-    1. Initialize Ray cluster
-    2. Load and preprocess training data
-    3. Train XGBoost model
-    4. Monitor and log metrics
+    This DAG handles the end-to-end training process using a dedicated Ray cluster
     """
-    # Initialize Ray
-    ray_init = init_ray()
+    # Connect to Ray cluster
+    ray_connect = connect_ray()
 
     # Load and prepare data
     dataset = load_training_data()
@@ -203,11 +186,11 @@ def training_pipeline():
     # Train model
     metrics = train_model(train_valid_datasets)
 
-    # Cleanup
-    cleanup = cleanup_ray()
+    # Disconnect
+    ray_disconnect = disconnect_ray()
 
     # Define dependencies
-    ray_init >> dataset >> train_valid_datasets >> metrics >> cleanup
+    ray_connect >> dataset >> train_valid_datasets >> metrics >> ray_disconnect
 
 
 # Create DAG instance
