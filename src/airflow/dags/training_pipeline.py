@@ -113,11 +113,12 @@ def train_model_with_ray(data):
         dataset = dataset.filter(lambda x: x is not None)
         train_dataset, valid_dataset = dataset.train_test_split(test_size=0.3)
 
-        # MinIO
+        # MinIO with allow_bucket_creation configuration
         fs = pyarrow.fs.S3FileSystem(
             endpoint_override="http://minio:9000",
             access_key="minioadmin",
             secret_key="minioadmin",
+            allow_bucket_creation=True,
         )
 
         # Configure training
