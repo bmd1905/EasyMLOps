@@ -7,7 +7,9 @@ services:
       - "6379:6379"
       - "8265:8265"
       - "10001:10001"
-    command: bash -c "ray start --head --dashboard-port=8265 --port=6379 --dashboard-host=0.0.0.0 --redis-password=your_password --block"
+    volumes:
+      - /tmp/ray:/tmp/ray
+    command: bash -c "ray start --head --dashboard-port=8265 --port=6379 --dashboard-host=0.0.0.0 --redis-password=your_password --block --temp-dir=/tmp/ray"
     shm_size: 2g
     deploy:
       resources:
@@ -34,6 +36,32 @@ services:
           memory: '12g'
     networks:
       - easydatapipeline_default
+
+  prometheus:
+    image: prom/prometheus:v2.38.0
+    container_name: prometheus
+    restart: unless-stopped
+    user: root
+    volumes:
+        - prometheus_data:/prometheus
+        - /tmp/ray:/tmp/ray
+        - ../prometheus/config/prometheus.yml:/etc/prometheus/prometheus.yml
+        # - ../prometheus/config/alert-rules.yml:/etc/prometheus/alert-rules.yml
+    command:
+        - '--config.file=/etc/prometheus/prometheus.yml'
+        - '--storage.tsdb.path=/prometheus'
+        - '--web.console.libraries=/etc/prometheus/console_libraries'
+        - '--web.console.templates=/etc/prometheus/consoles'
+        - '--storage.tsdb.retention.time=20h'
+        - '--web.enable-lifecycle'
+        - '--web.listen-address=0.0.0.0:9090'
+    ports:
+      - 9090:9090
+    networks:
+      - easydatapipeline_default
+
+volumes:
+  prometheus_data:
 
 networks:
   easydatapipeline_default:

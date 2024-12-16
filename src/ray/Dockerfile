@@ -16,5 +16,3 @@ RUN pip install --no-cache-dir \
     'urllib3<2.0.0' \
     'tensorboardX==2.6.2' \
     'boto3>=1.34.90'
-
-CMD ["bash", "-c", "ray start --head --num-cpus 1 --dashboard-host 0.0.0.0 --include-dashboard true --block"]
