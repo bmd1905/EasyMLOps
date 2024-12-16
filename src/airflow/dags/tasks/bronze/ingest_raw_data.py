@@ -5,9 +5,12 @@ from datetime import timedelta
 from typing import Any, Dict, List, Set, Tuple
 
 from config.data_pipeline_config import DataPipelineConfig
+from loguru import logger
 
 from airflow.decorators import task
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
+
+logger = logger.bind(name=__name__)
 
 
 @task()
@@ -35,7 +38,7 @@ def load_checkpoint(s3_hook: S3Hook, config: DataPipelineConfig) -> Set[str]:
         if checkpoint_data:
             return set(json.loads(checkpoint_data).get("processed_keys", []))
     except Exception as e:
-        print(f"No checkpoint found or error loading checkpoint: {str(e)}")
+        logger.warning(f"No checkpoint found or error loading checkpoint: {str(e)}")
     return set()
 
 
@@ -52,7 +55,7 @@ def save_checkpoint(
             replace=True,
         )
     except Exception as e:
-        print(f"Error saving checkpoint: {str(e)}")
+        logger.error(f"Error saving checkpoint: {str(e)}")
 
 
 def process_s3_object(
@@ -79,7 +82,7 @@ def process_s3_object(
         return key, [json_data], bytes_processed
 
     except Exception as e:
-        print(f"Error processing file {key}: {str(e)}")
+        logger.error(f"Error processing file {key}: {str(e)}")
         return key, [], 0
 
 
@@ -120,10 +123,10 @@ def ingest_raw_data(config: DataPipelineConfig, valid: bool = True) -> Dict[str,
         keys_to_process = list(all_keys - processed_keys)
 
         if not keys_to_process:
-            print("No new files to process")
+            logger.info("No new files to process")
             return {"data": [], "skipped_files": len(processed_keys)}
 
-        print(f"Found {len(keys_to_process)} new files to process")
+        logger.info(f"Found {len(keys_to_process)} new files to process")
 
         # Process new files in parallel with increased workers
         with ThreadPoolExecutor(
@@ -154,7 +157,7 @@ def ingest_raw_data(config: DataPipelineConfig, valid: bool = True) -> Dict[str,
                     else:
                         error_files += 1
                 except Exception as e:
-                    print(f"Error processing {key}: {str(e)}")
+                    logger.error(f"Error processing {key}: {str(e)}")
                     error_files += 1
 
             # Update checkpoint with newly processed files
@@ -167,14 +170,14 @@ def ingest_raw_data(config: DataPipelineConfig, valid: bool = True) -> Dict[str,
         if not all_data and not skipped_files:
             raise Exception("No valid JSON data found in any files")
 
-        print(
+        logger.info(
             f"Successfully processed {processed_files} files, {error_files} files had errors, "
             f"skipped {skipped_files} previously processed files"
         )
-        print(f"Total new records ingested: {len(all_data)}")
+        logger.info(f"Total new records ingested: {len(all_data)}")
 
-        print(f"Total ingestion time: {time.time() - start_time:.2f} seconds")
-        print(
+        logger.info(f"Total ingestion time: {time.time() - start_time:.2f} seconds")
+        logger.info(
             f"Average speed: {total_bytes_processed / (time.time() - start_time) / 1024 / 1024:.2f} MB/s"
         )
 

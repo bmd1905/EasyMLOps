@@ -1,9 +1,9 @@
-import logging
 from datetime import timedelta
 from typing import Any, Dict
 
 import pendulum
 from config.data_pipeline_config import DataPipelineConfig
+from loguru import logger
 from tasks.bronze.ingest_raw_data import (
     check_minio_connection,
     ingest_raw_data,
@@ -16,8 +16,7 @@ from airflow.decorators import dag, task
 from airflow.exceptions import AirflowException
 from airflow.utils.task_group import TaskGroup
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = logger.bind(name=__name__)
 
 # Define default arguments
 default_args = {
