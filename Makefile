@@ -42,10 +42,10 @@ up-dwh:
 	docker compose -f $(DWH_COMPOSE_FILE) up -d --build
 
 up-ray-cluster:
-	docker compose -f $(RAY_COMPOSE_FILE) up -d --build --remove-orphans
+	docker compose -f $(RAY_COMPOSE_FILE) up -d --build
 
 up-monitor:
-	docker compose -f $(MONITOR_COMPOSE_FILE) up -d --build --remove-orphans
+	docker compose -f $(MONITOR_COMPOSE_FILE) up -d --build
 
 down-kafka:
 	docker compose -f $(KAFKA_COMPOSE_FILE) down

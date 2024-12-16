@@ -7,8 +7,8 @@ services:
     volumes:
         - prometheus_data:/prometheus
         - /tmp/ray:/tmp/ray
-        - ../prometheus/config/prometheus.yml:/etc/prometheus/prometheus.yml
-        # - ../prometheus/config/alert-rules.yml:/etc/prometheus/alert-rules.yml
+        - ./src/prometheus/config/prometheus.yml:/etc/prometheus/prometheus.yml
+        # - ./src/prometheus/config/alert-rules.yml:/etc/prometheus/alert-rules.yml
     command:
         - '--config.file=/etc/prometheus/prometheus.yml'
         - '--storage.tsdb.path=/prometheus'
@@ -30,8 +30,8 @@ services:
     volumes:
       - grafana_data:/var/lib/grafana
       - /tmp/ray/session_latest/metrics/grafana/dashboards:/opt/grafana/dashboards:ro
-      - ../grafana/config/dashboards.yaml:/etc/grafana/provisioning/dashboards/dashboards.yaml:ro
-      - ../grafana/config/datasources.yaml:/etc/grafana/provisioning/datasources/datasource.yaml:ro
+      - ./src/grafana/config/dashboards.yaml:/etc/grafana/provisioning/dashboards/dashboards.yaml:ro
+      - ./src/grafana/config/datasources.yaml:/etc/grafana/provisioning/datasources/datasource.yaml:ro
     environment:
       - GF_SECURITY_ADMIN_USER=${ADMIN_USER:-admin}
       - GF_SECURITY_ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin}
