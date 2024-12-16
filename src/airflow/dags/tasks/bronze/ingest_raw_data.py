@@ -12,9 +12,6 @@ from airflow.decorators import task
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from airflow.utils.log.logging_mixin import LoggingMixin
 
-# Disable lineage tracking
-S3Hook.disable_lineage_tracking()
-
 logger = logger.bind(name=__name__)
 
 
