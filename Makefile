@@ -7,6 +7,7 @@ AIRFLOW_COMPOSE_FILE := src/airflow/docker-compose.airflow.yaml
 MINIO_COMPOSE_FILE := docker-compose.minio.yaml
 DWH_COMPOSE_FILE := docker-compose.dwh.yaml
 RAY_COMPOSE_FILE := src/ray/docker-compose.ray.yaml
+MONITOR_COMPOSE_FILE := docker-compose.monitor.yaml
 PYTHON := python3
 
 # Data Ingestion and Streaming Tests
@@ -41,7 +42,10 @@ up-dwh:
 	docker compose -f $(DWH_COMPOSE_FILE) up -d --build
 
 up-ray-cluster:
-	docker compose -f $(RAY_COMPOSE_FILE) up -d --build
+	docker compose -f $(RAY_COMPOSE_FILE) up -d --build --remove-orphans
+
+up-monitor:
+	docker compose -f $(MONITOR_COMPOSE_FILE) up -d --build --remove-orphans
 
 down-kafka:
 	docker compose -f $(KAFKA_COMPOSE_FILE) down
@@ -56,16 +60,20 @@ down-dwh:
 	docker compose -f $(DWH_COMPOSE_FILE) down
 
 down-ray-cluster:
-	docker compose -f $(RAY_COMPOSE_FILE) down
+	docker compose -f $(RAY_COMPOSE_FILE) down -v
+
+down-monitor:
+	docker compose -f $(MONITOR_COMPOSE_FILE) down -v
 
 restart-kafka: down-kafka up-kafka
 restart-airflow: down-airflow up-airflow
 restart-minio: down-minio up-minio
 restart-dwh: down-dwh up-dwh
 restart-ray-cluster: down-ray-cluster up-ray-cluster
+restart-monitor: down-monitor up-monitor
 # Convenience Commands
-up: up-kafka up-airflow up-minio up-dwh
-down: down-kafka down-airflow down-minio down-dwh
+up: up-kafka up-airflow up-minio up-dwh up-monitor
+down: down-kafka down-airflow down-minio down-dwh down-monitor
 restart: down up
 
 # Utility Commands
@@ -84,12 +92,16 @@ logs-dwh:
 logs-ray-cluster:
 	docker compose -f $(RAY_COMPOSE_FILE) logs -f
 
+logs-monitor:
+	docker compose -f $(MONITOR_COMPOSE_FILE) logs -f
+
 clean:
 	docker compose -f $(KAFKA_COMPOSE_FILE) down -v
 	docker compose -f $(AIRFLOW_COMPOSE_FILE) down -v
 	docker compose -f $(MINIO_COMPOSE_FILE) down -v
 	docker compose -f $(DWH_COMPOSE_FILE) down -v
 	docker compose -f $(RAY_COMPOSE_FILE) down -v
+	docker compose -f $(MONITOR_COMPOSE_FILE) down -v
 	docker system prune -f
 
 view-topics:
@@ -111,3 +123,4 @@ help:
 	@echo "  make restart         - Restart all services"
 	@echo "  make clean           - Remove all containers and volumes"
 	@echo "  make logs-<service>  - View logs for specific service"
+	@echo "  make view-<service>  - View specific service"
