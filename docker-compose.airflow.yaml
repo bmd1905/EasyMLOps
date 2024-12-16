@@ -100,6 +100,8 @@ services:
       retries: 5
       start_period: 5s
     restart: always
+    networks:
+      - airflow_network
 
   redis:
     # Redis is limited to 7.2-bookworm due to licencing change
@@ -114,6 +116,8 @@ services:
       retries: 50
       start_period: 30s
     restart: always
+    networks:
+      - airflow_network
 
   airflow-webserver:
     <<: *airflow-common
@@ -131,6 +135,8 @@ services:
       <<: *airflow-common-depends-on
       airflow-init:
         condition: service_completed_successfully
+    networks:
+      - airflow_network
 
   airflow-scheduler:
     <<: *airflow-common
@@ -146,6 +152,8 @@ services:
       <<: *airflow-common-depends-on
       airflow-init:
         condition: service_completed_successfully
+    networks:
+      - airflow_network
 
   airflow-worker:
     <<: *airflow-common
@@ -169,6 +177,8 @@ services:
       <<: *airflow-common-depends-on
       airflow-init:
         condition: service_completed_successfully
+    networks:
+      - airflow_network
 
   airflow-triggerer:
     <<: *airflow-common
@@ -184,6 +194,8 @@ services:
       <<: *airflow-common-depends-on
       airflow-init:
         condition: service_completed_successfully
+    networks:
+      - airflow_network
 
   airflow-init:
     <<: *airflow-common
@@ -248,6 +260,8 @@ services:
     user: "0:0"
     volumes:
       - ${AIRFLOW_PROJ_DIR:-.}:/sources
+    networks:
+      - airflow_network
 
   airflow-cli:
     <<: *airflow-common
@@ -261,6 +275,8 @@ services:
       - bash
       - -c
       - airflow
+    networks:
+      - airflow_network
 
   # You can enable flower by adding "--profile flower" option e.g. docker-compose --profile flower up
   # or by explicitly targeted on the command line e.g. docker-compose up flower.
@@ -283,6 +299,13 @@ services:
       <<: *airflow-common-depends-on
       airflow-init:
         condition: service_completed_successfully
+    networks:
+      - airflow_network
 
 volumes:
   postgres-db-volume:
+
+networks:
+  airflow_network:
+    name: airflow_network
+    external: false
