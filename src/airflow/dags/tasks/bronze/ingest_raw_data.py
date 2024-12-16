@@ -5,12 +5,12 @@ from datetime import timedelta
 from typing import Any, Dict, List, Set, Tuple
 
 from botocore.config import Config
-from config.data_pipeline_config import DataPipelineConfig
 from loguru import logger
 
 from airflow.decorators import task
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from airflow.utils.log.logging_mixin import LoggingMixin
+from config.data_pipeline_config import DataPipelineConfig
 
 logger = logger.bind(name=__name__)
 
@@ -130,12 +130,15 @@ def ingest_raw_data(config: DataPipelineConfig, valid: bool = True) -> Dict[str,
         checkpoint_key = get_checkpoint_key(config)
         all_keys.discard(checkpoint_key)  # Remove checkpoint file
 
+        # DEV: only keep 1000 keys
+        # all_keys = list(all_keys)[:1000]
+
         if not all_keys:
             raise Exception(f"No files found in path: {config.path_prefix}")
 
         log.info("Loading checkpoint data...")
         processed_keys = load_checkpoint(s3_hook, config)
-        keys_to_process = list(all_keys - processed_keys)
+        keys_to_process = list(set(all_keys) - processed_keys)
         if not keys_to_process:
             log.info("No new files to process")
             return {"data": [], "skipped_files": len(processed_keys)}

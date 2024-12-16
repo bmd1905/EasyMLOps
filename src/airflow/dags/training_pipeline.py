@@ -6,6 +6,7 @@ from typing import Any, Dict
 import pandas as pd
 import pendulum
 from ray_provider.decorators import ray
+import jinja2
 
 from airflow.decorators import dag, task
 from airflow.exceptions import AirflowException
@@ -55,6 +56,13 @@ default_args = {
 }
 
 
+def load_sql_template(filename: str) -> str:
+    """Load SQL template from file"""
+    sql_dir = Path(__file__).parent.parent / "include"
+    with open(sql_dir / filename, "r") as f:
+        return f.read()
+
+
 @task()
 def load_training_data() -> Dict[str, Any]:
     """Load training data from DWH"""
@@ -71,9 +79,10 @@ def load_training_data() -> Dict[str, Any]:
             "is_purchased",
         ]
 
-        query = (
-            f"SELECT {', '.join(feature_columns)} FROM dwh.vw_ml_purchase_prediction"
-        )
+        # Load and render SQL template
+        template = jinja2.Template(load_sql_template("queries/load_training_data.sql"))
+        query = template.render(feature_columns=feature_columns)
+
         df = postgres_hook.get_pandas_df(query)
 
         # Data preprocessing
