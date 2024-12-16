@@ -1,5 +1,4 @@
 import logging
-from datetime import datetime
 from typing import Any, Dict
 
 import pandas as pd
@@ -83,6 +82,15 @@ def calculate_session_metrics(df: pd.DataFrame) -> pd.DataFrame:
     return df.merge(session_metrics, on="user_session", how="left")
 
 
+def check_duplicates(df: pd.DataFrame) -> pd.DataFrame:
+    """Remove duplicate records based on record_hash"""
+    initial_count = len(df)
+    df = df.drop_duplicates(subset=["record_hash"], keep="first")
+    duplicate_count = initial_count - len(df)
+    logger.info(f"Removed {duplicate_count} duplicate records")
+    return df
+
+
 def prepare_for_serialization(df: pd.DataFrame) -> Dict[str, Any]:
     """Convert DataFrame to serializable format"""
     # Convert timestamps to ISO format strings
@@ -100,6 +108,9 @@ def transform_data(validated_data: Dict[str, Any]) -> Dict[str, Any]:
     try:
         # Convert to DataFrame
         df = pd.DataFrame(validated_data["data"])
+
+        # Check and remove duplicates
+        df = check_duplicates(df)
 
         # Apply transformations
         df = transform_timestamps(df)
