@@ -8,13 +8,21 @@ services:
       - "6379:6379"
       - "8265:8265"
       - "10001:10001"
+    command: >
+      bash -c "ray start --head
+      --dashboard-port=8265
+      --dashboard-host=0.0.0.0
+      --port=6379
+      --redis-password=your_password
+      --block
+      --temp-dir=/tmp/ray"
     environment:
-      - RAY_GRAFANA_HOST=localhost:3000
-      - RAY_PROMETHEUS_HOST=prometheus:9090
+      - RAY_GRAFANA_HOST=http://grafana:3000
+      - RAY_GRAFANA_IFRAME_HOST=http://localhost:3009
+      - RAY_PROMETHEUS_HOST=http://prometheus:9090
       - RAY_PROMETHEUS_NAME=Prometheus
     volumes:
       - /tmp/ray:/tmp/ray
-    command: bash -c "RAY_GRAFANA_HOST=localhost:3000 RAY_PROMETHEUS_HOST=prometheus:9090 RAY_PROMETHEUS_NAME=Prometheus ray start --head --dashboard-port=8265 --port=6379 --dashboard-host=0.0.0.0 --redis-password=your_password --block --temp-dir=/tmp/ray"
     shm_size: 2g
     deploy:
       resources:

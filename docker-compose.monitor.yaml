@@ -36,7 +36,7 @@ services:
       - GF_SECURITY_ADMIN_USER=${ADMIN_USER:-admin}
       - GF_SECURITY_ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin}
     ports:
-      - 3003:3000
+      - 3009:3000
     networks:
       - easydatapipeline_default
     healthcheck:
