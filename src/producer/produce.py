@@ -72,6 +72,11 @@ def create_streams(servers, avro_schemas_path, schema_registry_client):
             producer = KafkaProducer(
                 bootstrap_servers=servers,
                 value_serializer=str.encode,  # Simple string encoding
+                batch_size=16384,  # Increase batch size (default 16384)
+                buffer_memory=33554432,  # 32MB buffer memory
+                compression_type="gzip",  # Enable compression
+                linger_ms=50,  # Wait up to 50ms to batch messages
+                acks=1,  # Only wait for leader acknowledgment
             )
             admin = KafkaAdminClient(bootstrap_servers=servers)
             print("SUCCESS: instantiated Kafka admin and producer")
@@ -102,18 +107,48 @@ def create_streams(servers, avro_schemas_path, schema_registry_client):
     with open(avro_schema_path, "r") as f:
         parsed_avro_schema = json.loads(f.read())
 
-    # Load parquet data
+    # Load data and prepare for batch processing
     try:
         df = pd.read_parquet("data/sample.parquet")
         print(f"Loaded {len(df)} records from parquet file")
+
+        # Pre-format all records in parallel
+        def format_record(row):
+            index = row.name  # Get the index from the row
+            record = {
+                "event_time": str(row["event_time"]),
+                "event_type": str(row["event_type"]),
+                "product_id": int(row["product_id"]),
+                "category_id": int(row["category_id"]),
+                "category_code": str(row["category_code"])
+                if pd.notnull(row["category_code"])
+                else None,
+                "brand": str(row["brand"]) if pd.notnull(row["brand"]) else None,
+                "price": float(row["price"]) if index % 10 != 0 else -100,
+                "user_id": int(row["user_id"]),
+                "user_session": str(row["user_session"]),
+            }
+
+            formatted_record = {
+                "schema": {"type": "struct", "fields": parsed_avro_schema["fields"]},
+                "payload": record,
+            }
+            return json.dumps(formatted_record)
+
+        # Process records in parallel using all available CPU cores
+        print("Formatting records in parallel...")
+        records = df.apply(format_record, axis=1).tolist()
+        print(f"Formatted {len(records)} records")
+
     except Exception as e:
-        print(f"Error loading parquet file: {e}")
+        print(f"Error loading/processing parquet file: {e}")
         return
 
-    # Get topic name
+    # Get topic name and create it if needed
     topic_name = OUTPUT_TOPICS
+    create_topic(admin, topic_name=topic_name)
 
-    # Check if schema exists in registry, if not register it
+    # Register schema if needed
     schema_version_info = schema_registry_client.check_version(
         f"{topic_name}-schema", schema.AvroSchema(parsed_avro_schema)
     )
@@ -126,47 +161,18 @@ def create_streams(servers, avro_schemas_path, schema_registry_client):
         )
         print(f"Registered new schema with ID: {schema_id}")
 
-    # Create topic if not exists
-    create_topic(admin, topic_name=topic_name)
+    # Batch send records
+    print("Starting to send records...")
+    for i, record in enumerate(records):
+        producer.send(topic_name, value=record)
 
-    for index, row in df.iterrows():
-        try:
-            # Prepare record
-            record = {
-                "event_time": str(row["event_time"]),
-                "event_type": str(row["event_type"]),
-                "product_id": int(row["product_id"]),
-                "category_id": int(row["category_id"]),
-                "category_code": str(row["category_code"])
-                if pd.notnull(row["category_code"])
-                else None,
-                "brand": str(row["brand"]) if pd.notnull(row["brand"]) else None,
-                "price": float(row["price"]),
-                "user_id": int(row["user_id"]),
-                "user_session": str(row["user_session"]),
-            }
+        # Only print progress every 1000 records
+        if i % 1000 == 0:
+            print(f"Sent {i} records")
 
-            # Fake invalid record
-            if index % 10 == 0:
-                record["price"] = -100
-
-            # Create the record including schema, and data
-            formatted_record = {
-                "schema": {"type": "struct", "fields": parsed_avro_schema["fields"]},
-                "payload": record,
-            }
-
-            # Convert to JSON string before sending
-            json_str = json.dumps(formatted_record)
-
-            # Send JSON string directly to Kafka
-            producer.send(topic_name, value=json_str)
-            print(f"Sent record: {index}")
-            sleep(0.1)  # Small delay between messages
-
-        except Exception as e:
-            print(f"Error processing record: {e}")
-            continue
+    # Make sure all messages are sent
+    producer.flush()
+    print(f"Finished sending {len(records)} records")
 
 
 def teardown_stream(topic_name, servers=["localhost:9092"]):
