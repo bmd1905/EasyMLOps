@@ -2,6 +2,7 @@ from datetime import timedelta
 from typing import Any, Dict
 
 import pendulum
+from config.data_pipeline_config import DataPipelineConfig
 from loguru import logger
 from tasks.bronze.ingest_raw_data import (
     check_minio_connection,
@@ -14,8 +15,6 @@ from tasks.silver.transform_data import transform_data
 from airflow.decorators import dag, task
 from airflow.exceptions import AirflowException
 from airflow.utils.task_group import TaskGroup
-from config.data_pipeline_config import DataPipelineConfig
-from feature_stores.materialize_features import materialize_features
 
 logger = logger.bind(name=__name__)
 
@@ -125,7 +124,7 @@ def gold_layer(transformed_data: Dict[str, Any]) -> bool:
     start_date=pendulum.datetime(2024, 1, 1, tz="UTC"),
     catchup=False,
     tags=["data_lake", "data_warehouse"],
-    max_active_runs=1,
+    max_active_runs=3,
     doc_md=__doc__,
 )
 def data_pipeline():
@@ -154,15 +153,6 @@ def data_pipeline():
     with TaskGroup("gold_layer_group") as gold_group:
         success = gold_layer(transformed_data)  # noqa: F841
 
-    # Add feature materialization task
-    @task(trigger_rule="all_done")
-    def materialize_features_task():
-        """Materialize features to online store"""
-        success = materialize_features()
-        if not success:
-            raise AirflowException("Failed to materialize features")
-        return success
-
     # Add monitoring task
     @task(trigger_rule="all_done")
     def monitor_pipeline():
@@ -171,13 +161,7 @@ def data_pipeline():
         pass
 
     # Define dependencies
-    (
-        bronze_group
-        >> silver_group
-        >> gold_group
-        >> materialize_features_task()
-        >> monitor_pipeline()
-    )
+    bronze_group >> silver_group >> gold_group >> monitor_pipeline()
 
 
 # Create DAG instance

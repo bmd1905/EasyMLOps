@@ -51,6 +51,9 @@ up-ray-cluster:
 up-monitor:
 	docker compose -f $(MONITOR_COMPOSE_FILE) up -d --build
 
+down-network:
+	docker network rm easydatapipeline_default
+
 down-kafka:
 	docker compose -f $(KAFKA_COMPOSE_FILE) down
 
@@ -82,7 +85,7 @@ restart-monitor: down-monitor up-monitor
 
 # Convenience Commands
 up: up-network up-kafka up-airflow up-data-lake up-dwh up-online-store up-ray-cluster up-monitor deploy_s3_connector
-down: down-kafka down-airflow down-data-lake down-dwh down-online-store down-ray-cluster down-monitor
+down: down-kafka down-airflow down-data-lake down-dwh down-online-store down-ray-cluster down-monitor down-network
 restart: down up
 
 # Utility Commands

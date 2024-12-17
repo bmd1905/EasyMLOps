@@ -13,8 +13,7 @@ provider: local
 # we pick Redis https://docs.feast.dev/reference/online-stores/redis#examples
 online_store:
   type: redis
-  connection_string: ${REDIS_CONNECTION_STRING}
-  key_ttl_seconds: 86400  # 24 hours
+  connection_string: "localhost:6379"
 # For offline store, we go with PostgreSQL
 # https://docs.feast.dev/reference/offline-stores/postgres
 offline_store:

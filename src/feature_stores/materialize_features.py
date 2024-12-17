@@ -1,9 +1,9 @@
 from datetime import datetime, timedelta
+
+import redis
+from dotenv import load_dotenv
 from feast import FeatureStore
 from loguru import logger
-import redis
-import os
-from dotenv import load_dotenv
 
 
 def materialize_features():
@@ -12,24 +12,18 @@ def materialize_features():
         # Load environment variables
         load_dotenv()
 
-        # Test Redis connection first
-        redis_host, redis_port = os.getenv("REDIS_CONNECTION_STRING").split(":")
-        redis_client = redis.Redis(
-            host=redis_host, port=int(redis_port), decode_responses=True
-        )
-        redis_client.ping()  # Test connection
-
         # Initialize feature store
         store = FeatureStore(repo_path=".")
 
         # Calculate time range
         end_date = datetime.utcnow()
-        start_date = end_date - timedelta(days=1)  # noqa: F841
+        start_date = end_date - timedelta(days=1)
 
-        # Materialize features
-        store.materialize_incremental(
+        # Materialize features using feature view names
+        store.materialize(
+            start_date=start_date,
             end_date=end_date,
-            feature_views=store.list_feature_views(),
+            feature_views=["user_features", "product_features"],
         )
 
         logger.info("Successfully materialized features")
