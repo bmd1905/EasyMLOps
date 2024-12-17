@@ -2,6 +2,8 @@ import json
 import os
 from datetime import datetime
 from typing import Any, Dict, List, Union
+from threading import Lock
+import time
 
 from pyflink.common import WatermarkStrategy
 from pyflink.common.typeinfo import Types
@@ -10,6 +12,28 @@ from pyflink.datastream import StreamExecutionEnvironment
 from ..connectors.sinks.kafka_sink import build_sink
 from ..connectors.sources.kafka_source import build_source
 from ..jobs.base import FlinkJob
+
+
+# Replace the global counter with a more sophisticated counter class
+class RequestCounter:
+    def __init__(self):
+        self.count = 0
+        self.last_log_time = time.time()
+        self.lock = Lock()
+
+    def increment(self):
+        with self.lock:
+            self.count += 1
+            current_time = time.time()
+            # Log every second
+            if current_time - self.last_log_time >= 1.0:
+                print(f"Processed {self.count} records in the last second")
+                self.count = 0
+                self.last_log_time = current_time
+
+
+# Initialize the counter
+request_counter = RequestCounter()
 
 
 def validate_field_type(
@@ -148,10 +172,11 @@ def validate_schema(record: str) -> dict:
         record: JSON string containing schema and payload
 
     Returns:
-        dict: A dictionary containing:
-            - bool: True if record is valid, False otherwise
-            - dict | None: The invalid record if validation fails, None if valid
+        dict: A dictionary containing validation results
     """
+    # Increment request counter
+    request_counter.increment()
+
     # Convert string to dict if needed
     record_dict = json.loads(record)  # if isinstance(record, str) else record
 
@@ -163,7 +188,7 @@ def validate_schema(record: str) -> dict:
     record_dict["valid"] = "VALID" if valid else "INVALID"
     record_dict["error_message"] = error_message
     record_dict["error_type"] = error_type
-    print("Schema validation result: ", valid)
+    # print("Schema validation result: ", valid)
 
     return json.dumps(record_dict)
 

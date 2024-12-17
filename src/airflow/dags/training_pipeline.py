@@ -3,6 +3,7 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Any, Dict
 
+import jinja2
 import pandas as pd
 import pendulum
 from ray_provider.decorators import ray
@@ -55,6 +56,13 @@ default_args = {
 }
 
 
+def load_sql_template(filename: str) -> str:
+    """Load SQL template from file"""
+    sql_dir = Path(__file__).parent / "include"
+    with open(sql_dir / filename, "r") as f:
+        return f.read()
+
+
 @task()
 def load_training_data() -> Dict[str, Any]:
     """Load training data from DWH"""
@@ -71,9 +79,10 @@ def load_training_data() -> Dict[str, Any]:
             "is_purchased",
         ]
 
-        query = (
-            f"SELECT {', '.join(feature_columns)} FROM dwh.vw_ml_purchase_prediction"
-        )
+        # Load and render SQL template
+        template = jinja2.Template(load_sql_template("queries/load_training_data.sql"))
+        query = template.render(feature_columns=feature_columns)
+
         df = postgres_hook.get_pandas_df(query)
 
         # Data preprocessing
@@ -113,11 +122,12 @@ def train_model_with_ray(data):
         dataset = dataset.filter(lambda x: x is not None)
         train_dataset, valid_dataset = dataset.train_test_split(test_size=0.3)
 
-        # MinIO
+        # MinIO with allow_bucket_creation configuration
         fs = pyarrow.fs.S3FileSystem(
             endpoint_override="http://minio:9000",
             access_key="minioadmin",
             secret_key="minioadmin",
+            allow_bucket_creation=True,
         )
 
         # Configure training
