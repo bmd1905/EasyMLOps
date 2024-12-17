@@ -24,14 +24,13 @@ product_source = PostgreSQLSource(
     SELECT DISTINCT
         f.product_id,
         p.price,
-        c.category_l1 as category_code_level1,
-        c.category_l2 as category_code_level2,
+        SPLIT_PART(c.category_code, '.', 1) as category_code_level1,
+        SPLIT_PART(c.category_code, '.', 2) as category_code_level2,
         f.event_timestamp
     FROM dwh.fact_events f
     JOIN dwh.dim_product p ON f.product_id = p.product_id
     JOIN dwh.dim_category c ON f.category_id = c.category_id
-    WHERE c.category_l1 IS NOT NULL
-        AND c.category_l2 IS NOT NULL
+    WHERE c.category_code IS NOT NULL
         AND f.event_type IN ('cart', 'purchase')
     """,
     timestamp_field="event_timestamp",
