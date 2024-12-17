@@ -110,10 +110,14 @@ def train_model_with_ray(data):
 
     import ray
     from airflow.exceptions import AirflowException
+    from ray.data import DataContext
     from ray.train import CheckpointConfig, FailureConfig, RunConfig, ScalingConfig
     from ray.train.xgboost import XGBoostTrainer
 
     try:
+        # Enable verbose progress reporting
+        DataContext.get_current().execution_options.verbose_progress = True
+
         # Convert data back to Ray dataset - now access the 'data' key
         df = pd.DataFrame(data["data"])
         dataset = ray.data.from_pandas(df)
