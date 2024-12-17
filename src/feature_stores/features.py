@@ -1,6 +1,6 @@
 from datetime import timedelta
 from feast import Entity, FeatureView, Field
-from feast.types import Float32, Int64
+from feast.types import Float32, Int64, String
 from data_sources import user_source, product_source
 
 # Define entities
@@ -29,8 +29,8 @@ product_features = FeatureView(
     ttl=timedelta(days=1),
     schema=[
         Field(name="price", dtype=Float32),
-        Field(name="category_code_level1", dtype=Int64),
-        Field(name="category_code_level2", dtype=Int64),
+        Field(name="category_code_level1", dtype=String),
+        Field(name="category_code_level2", dtype=String),
     ],
     source=product_source,
     online=True,

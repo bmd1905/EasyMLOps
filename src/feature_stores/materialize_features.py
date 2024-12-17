@@ -16,8 +16,8 @@ def materialize_features():
         store = FeatureStore(repo_path=".")
 
         # Calculate time range
-        end_date = datetime.utcnow()
-        start_date = end_date - timedelta(days=1)
+        end_date = datetime(2019, 10, 10)
+        start_date = end_date - timedelta(days=30)
 
         # Materialize features using feature view names
         store.materialize(
