@@ -72,7 +72,7 @@ def create_streams(servers, avro_schemas_path, schema_registry_client):
             producer = KafkaProducer(
                 bootstrap_servers=servers,
                 value_serializer=str.encode,  # Simple string encoding
-                batch_size=16384,  # Increase batch size (default 16384)
+                batch_size=1,  # Increase batch size (default 16384)
                 buffer_memory=33554432,  # 32MB buffer memory
                 compression_type="gzip",  # Enable compression
                 linger_ms=50,  # Wait up to 50ms to batch messages
@@ -169,6 +169,8 @@ def create_streams(servers, avro_schemas_path, schema_registry_client):
         # Only print progress every 1000 records
         if i % 1000 == 0:
             print(f"Sent {i} records")
+
+        sleep(0.1)
 
     # Make sure all messages are sent
     producer.flush()
