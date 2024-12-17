@@ -1,0 +1,28 @@
+# Configure our feature store
+# https://docs.feast.dev/reference/feature-repository/feature-store-yaml
+project: purchase_prediction
+# Location of the feature registry
+registry:
+  path: data/registry.db
+  cache_ttl_seconds: 5
+# Environment to deploy and operate
+# which can be local, gcp, aws or azure
+# https://docs.feast.dev/reference/providers/local
+provider: local
+# There are a wide range of online stores,
+# we pick Redis https://docs.feast.dev/reference/online-stores/redis#examples
+online_store:
+  type: redis
+  connection_string: ${REDIS_CONNECTION_STRING}
+  key_ttl_seconds: 86400  # 24 hours
+# For offline store, we go with PostgreSQL
+# https://docs.feast.dev/reference/offline-stores/postgres
+offline_store:
+  type: postgres
+  host: ${DWH_HOST}
+  port: 5433
+  database: dwh
+  db_schema: dwh
+  user: ${DWH_USER}
+  password: ${DWH_PASSWORD}
+entity_key_serialization_version: 2
