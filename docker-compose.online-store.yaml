@@ -1,0 +1,19 @@
+services:
+  # Online Store (Redis)
+  redis:
+    image: redis:latest
+    container_name: online-store-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 30s
+      retries: 50
+      start_period: 30s
+    networks:
+      - easydatapipeline_default
+
+networks:
+  easydatapipeline_default:
+    external: true

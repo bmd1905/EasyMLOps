@@ -5,7 +5,6 @@ services:
       dockerfile: Dockerfile
     user: root
     ports:
-      - "6379:6379"
       - "8265:8265"
       - "10001:10001"
     volumes:
