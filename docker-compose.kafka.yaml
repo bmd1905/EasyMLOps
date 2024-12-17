@@ -1,7 +1,7 @@
 services:
   zookeeper:
     image: confluentinc/cp-zookeeper:7.5.0
-    container_name: flink-zookeeper
+    container_name: kafka-zookeeper
     ports:
       - "2181:2181"
     healthcheck:
@@ -19,7 +19,7 @@ services:
   # at https://docs.confluent.io/platform/current/installation/docker/config-reference.html
   broker:
     image: confluentinc/cp-server:7.5.0
-    container_name: flink-broker
+    container_name: kafka-broker
     depends_on:
       zookeeper:
         condition: service_healthy
@@ -60,7 +60,7 @@ services:
   # For managing Avro schemas
   schema-registry:
     image: confluentinc/cp-schema-registry:7.5.0
-    container_name: flink-schema-registry
+    container_name: kafka-schema-registry
     depends_on:
       - broker
     ports:
@@ -80,7 +80,7 @@ services:
   # For connecting to offline store
   connect:
     image: confluentinc/cp-kafka-connect:7.5.0
-    container_name: flink-connect
+    container_name: kafka-connect
     depends_on:
       broker:
         condition: service_healthy
@@ -112,9 +112,9 @@ services:
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
     volumes:
       - $PWD/src/streaming/connectors/config/jars/kafka_connect/jars/:/etc/kafka-connect/jars
-    command: 
-      - bash 
-      - -c 
+    command:
+      - bash
+      - -c
       - |
         echo "Installing connector plugins"
         confluent-hub install --no-prompt confluentinc/kafka-connect-s3:10.5.7
@@ -126,7 +126,7 @@ services:
   # Confluent control center to manage Kafka
   control-center:
     image: confluentinc/cp-enterprise-control-center:7.5.0
-    container_name: flink-control-center
+    container_name: kafka-control-center
     depends_on:
       - broker
       - schema-registry
@@ -150,30 +150,30 @@ services:
       - easydatapipeline_default
 
   # Offline store
-  timescaledb:
-    image: timescale/timescaledb:latest-pg13
-    command: postgres -c shared_preload_libraries=timescaledb
-    container_name: flink-timescaledb
-    ports:
-      - "5432:5432"
-    healthcheck:
-      test: ["CMD", "psql", "-U", "k6", "-c", "SELECT 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    environment:
-      - PGDATA=/var/lib/postgresql/data/timescaledb
-      - POSTGRES_DB=k6
-      - POSTGRES_USER=k6
-      - POSTGRES_PASSWORD=k6
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    networks:
-      - easydatapipeline_default
+  # timescaledb:
+  #   image: timescale/timescaledb:latest-pg13
+  #   command: postgres -c shared_preload_libraries=timescaledb
+  #   container_name: kafka-timescaledb
+  #   ports:
+  #     - "5432:5432"
+  #   healthcheck:
+  #     test: ["CMD", "psql", "-U", "k6", "-c", "SELECT 1"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+  #   environment:
+  #     - PGDATA=/var/lib/postgresql/data/timescaledb
+  #     - POSTGRES_DB=k6
+  #     - POSTGRES_USER=k6
+  #     - POSTGRES_PASSWORD=k6
+  #   volumes:
+  #     - pgdata:/var/lib/postgresql/data
+  #   networks:
+  #     - easydatapipeline_default
 
   # Simulation of sending messages to Kafka topics
   kafka_producer:
-    container_name: flink-kafka-producer
+    container_name: kafka-producer
     build:
       context: src/producer
       dockerfile: Dockerfile
@@ -181,8 +181,6 @@ services:
       - src/producer/.env
     depends_on:
       broker:
-        condition: service_healthy
-      timescaledb:
         condition: service_healthy
     networks:
       - easydatapipeline_default
