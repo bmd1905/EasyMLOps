@@ -3,10 +3,10 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Any, Dict
 
+import jinja2
 import pandas as pd
 import pendulum
 from ray_provider.decorators import ray
-import jinja2
 
 from airflow.decorators import dag, task
 from airflow.exceptions import AirflowException
@@ -58,7 +58,7 @@ default_args = {
 
 def load_sql_template(filename: str) -> str:
     """Load SQL template from file"""
-    sql_dir = Path(__file__).parent.parent / "include"
+    sql_dir = Path(__file__).parent / "include"
     with open(sql_dir / filename, "r") as f:
         return f.read()
 

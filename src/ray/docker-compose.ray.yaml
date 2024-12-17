@@ -8,6 +8,8 @@ services:
       - "6379:6379"
       - "8265:8265"
       - "10001:10001"
+    volumes:
+      - /tmp/ray:/tmp/ray
     command: >
       bash -c "ray start --head
       --dashboard-port=8265
@@ -21,8 +23,6 @@ services:
       - RAY_GRAFANA_IFRAME_HOST=http://localhost:3009
       - RAY_PROMETHEUS_HOST=http://prometheus:9090
       - RAY_PROMETHEUS_NAME=Prometheus
-    volumes:
-      - /tmp/ray:/tmp/ray
     shm_size: 2g
     deploy:
       resources:
