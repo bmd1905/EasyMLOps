@@ -1,4 +1,5 @@
 services:
+  # Data Warehouse (aka Offline Store in this project)
   postgres-dwh:
     image: postgres:13
     container_name: postgres-dwh

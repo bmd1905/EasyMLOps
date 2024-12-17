@@ -124,7 +124,7 @@ def gold_layer(transformed_data: Dict[str, Any]) -> bool:
     start_date=pendulum.datetime(2024, 1, 1, tz="UTC"),
     catchup=False,
     tags=["data_lake", "data_warehouse"],
-    max_active_runs=1,
+    max_active_runs=3,
     doc_md=__doc__,
 )
 def data_pipeline():
