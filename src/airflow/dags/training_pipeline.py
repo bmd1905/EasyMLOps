@@ -46,14 +46,13 @@ def train_model_with_ray(data):
     """Train XGBoost model using Ray"""
     import pandas as pd
     import pyarrow.fs
-
-    import ray
-    from airflow.exceptions import AirflowException
-    from config.tune_config import (
+    from include.config.tune_config import (
         MINIO_CONFIG,
         TRAINING_CONFIG,
         XGBOOST_PARAMS,
     )
+
+    import ray
     from ray.data import DataContext
     from ray.train import CheckpointConfig, FailureConfig, RunConfig, ScalingConfig
     from ray.train.xgboost import XGBoostTrainer
