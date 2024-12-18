@@ -5,7 +5,7 @@ import jinja2
 
 def load_sql_template(filename: str) -> str:
     """Load SQL template from file"""
-    sql_dir = Path(__file__).parent.parent.parent / "include"
+    sql_dir = Path(__file__).parent.parent / "sql"
     with open(sql_dir / filename, "r") as f:
         return f.read()
 

@@ -4,7 +4,7 @@ from typing import Any, Dict, Optional, Tuple
 
 import pandas as pd
 import pendulum
-from common.scripts.monitoring import PipelineMonitoring
+from include.common.scripts.monitoring import PipelineMonitoring
 from loguru import logger
 
 from airflow.decorators import task
