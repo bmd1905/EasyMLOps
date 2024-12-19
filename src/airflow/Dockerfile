@@ -20,3 +20,6 @@ RUN pip install --no-cache-dir setuptools==69.0.3
 # Then install Python packages
 COPY requirements.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.txt
+
+# Copy the include directory to make it available as a package
+COPY include /opt/airflow/include/

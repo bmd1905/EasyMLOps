@@ -78,6 +78,8 @@ x-airflow-common:
     AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
     AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
     S3_BUCKET_NAME: ${S3_BUCKET_NAME}
+    # Add PYTHONPATH to include project root
+    PYTHONPATH: "/opt/airflow"
   volumes:
     - ${AIRFLOW_PROJ_DIR:-.}/dags:/opt/airflow/dags
     - ${AIRFLOW_PROJ_DIR:-.}/logs:/opt/airflow/logs
