@@ -26,8 +26,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '4'
-          memory: '8g'
+          cpus: '0.5'
+          memory: '1g'
     networks:
       - easydatapipeline_default
 
@@ -37,15 +37,15 @@ services:
       dockerfile: Dockerfile
     depends_on:
       - ray-head
-    command: bash -c "ray start --address=ray-head:6379 --redis-password=your_password --num-cpus="10" --block"
+    command: bash -c "ray start --address=ray-head:6379 --redis-password=your_password --num-cpus=10 --block"
     shm_size: 2g
     deploy:
       mode: replicated
-      replicas: 1
+      replicas: 3
       resources:
         limits:
-          cpus: '10'
-          memory: '12g'
+          cpus: '4'
+          memory: '4g'
     networks:
       - easydatapipeline_default
 

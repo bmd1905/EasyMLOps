@@ -9,6 +9,7 @@ DWH_COMPOSE_FILE := docker-compose.dwh.yaml
 ONLINE_STORE_COMPOSE_FILE := docker-compose.online-store.yaml
 RAY_COMPOSE_FILE := src/ray/docker-compose.ray.yaml
 MONITOR_COMPOSE_FILE := docker-compose.monitor.yaml
+MLFLOW_COMPOSE_FILE := docker-compose.mlflow.yaml
 PYTHON := python3
 
 # Data Ingestion and Streaming Tests
@@ -51,6 +52,9 @@ up-ray-cluster:
 up-monitor:
 	docker compose -f $(MONITOR_COMPOSE_FILE) up -d --build
 
+up-mlflow:
+	docker compose -f $(MLFLOW_COMPOSE_FILE) up -d --build
+
 down-network:
 	docker network rm easydatapipeline_default
 
@@ -75,6 +79,9 @@ down-ray-cluster:
 down-monitor:
 	docker compose -f $(MONITOR_COMPOSE_FILE) down -v
 
+down-mlflow:
+	docker compose -f $(MLFLOW_COMPOSE_FILE) down -v
+
 restart-kafka: down-kafka up-kafka
 restart-airflow: down-airflow up-airflow
 restart-data-lake: down-data-lake up-data-lake
@@ -82,9 +89,10 @@ restart-dwh: down-dwh up-dwh
 restart-online-store: down-online-store up-online-store
 restart-ray-cluster: down-ray-cluster up-ray-cluster
 restart-monitor: down-monitor up-monitor
+restart-mlflow: down-mlflow up-mlflow
 
 # Convenience Commands
-up: up-network up-kafka up-airflow up-data-lake up-dwh up-online-store up-ray-cluster up-monitor deploy_s3_connector
+up: up-network up-kafka up-airflow up-data-lake up-dwh up-online-store up-ray-cluster up-monitor up-mlflow deploy_s3_connector
 down: down-kafka down-airflow down-data-lake down-dwh down-online-store down-ray-cluster down-monitor down-network
 restart: down up
 
@@ -110,6 +118,9 @@ logs-ray-cluster:
 logs-monitor:
 	docker compose -f $(MONITOR_COMPOSE_FILE) logs -f
 
+logs-mlflow:
+	docker compose -f $(MLFLOW_COMPOSE_FILE) logs -f
+
 clean:
 	docker compose -f $(KAFKA_COMPOSE_FILE) down -v
 	docker compose -f $(AIRFLOW_COMPOSE_FILE) down -v
@@ -118,6 +129,7 @@ clean:
 	docker compose -f $(ONLINE_STORE_COMPOSE_FILE) down -v
 	docker compose -f $(RAY_COMPOSE_FILE) down -v
 	docker compose -f $(MONITOR_COMPOSE_FILE) down -v
+	docker compose -f $(MLFLOW_COMPOSE_FILE) down -v
 	docker system prune -f
 
 view-topics:

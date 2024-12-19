@@ -1,7 +1,7 @@
 from typing import Any, Dict
 
 import pandas as pd
-from common.scripts.monitoring import PipelineMonitoring
+from include.common.scripts.monitoring import PipelineMonitoring
 from loguru import logger
 
 from airflow.decorators import task

@@ -5,12 +5,12 @@ from datetime import timedelta
 from typing import Any, Dict, List, Set, Tuple
 
 from botocore.config import Config
+from include.config.data_pipeline_config import DataPipelineConfig
 from loguru import logger
 
 from airflow.decorators import task
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from airflow.utils.log.logging_mixin import LoggingMixin
-from config.data_pipeline_config import DataPipelineConfig
 
 logger = logger.bind(name=__name__)
 

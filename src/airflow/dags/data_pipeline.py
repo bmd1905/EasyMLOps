@@ -2,15 +2,15 @@ from datetime import timedelta
 from typing import Any, Dict
 
 import pendulum
-from config.data_pipeline_config import DataPipelineConfig
-from loguru import logger
-from tasks.bronze.ingest_raw_data import (
+from data_pipeline.bronze.ingest_raw_data import (
     check_minio_connection,
     ingest_raw_data,
 )
-from tasks.bronze.validate_raw_data import validate_raw_data
-from tasks.gold.load_to_dwh import load_dimensions_and_facts
-from tasks.silver.transform_data import transform_data
+from data_pipeline.bronze.validate_raw_data import validate_raw_data
+from data_pipeline.gold.load_to_dwh import load_dimensions_and_facts
+from data_pipeline.silver.transform_data import transform_data
+from include.config.data_pipeline_config import DataPipelineConfig
+from loguru import logger
 
 from airflow.decorators import dag, task
 from airflow.exceptions import AirflowException

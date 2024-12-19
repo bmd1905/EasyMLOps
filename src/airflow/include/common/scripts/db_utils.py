@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Dict, List
+from typing import Any
 
 import pandas as pd
 from psycopg2.extras import execute_values
@@ -10,7 +10,9 @@ from airflow.providers.postgres.hooks.postgres import PostgresHook
 logger = logging.getLogger(__name__)
 
 
-def create_schema_and_table(postgres_hook: PostgresHook, schema_class: Any, table_name: str) -> None:
+def create_schema_and_table(
+    postgres_hook: PostgresHook, schema_class: Any, table_name: str
+) -> None:
     """Create table and indexes based on schema definition"""
     try:
         # Create table
@@ -26,46 +28,50 @@ def create_schema_and_table(postgres_hook: PostgresHook, schema_class: Any, tabl
         for index_sql in schema_class.indexes:
             # Add IF NOT EXISTS to index creation
             if "CREATE INDEX" in index_sql:
-                index_sql = index_sql.replace("CREATE INDEX", "CREATE INDEX IF NOT EXISTS")
+                index_sql = index_sql.replace(
+                    "CREATE INDEX", "CREATE INDEX IF NOT EXISTS"
+                )
             postgres_hook.run(index_sql)
-            
+
     except Exception as e:
         raise AirflowException(f"Failed to create schema and table: {str(e)}")
 
 
-def batch_insert_data(postgres_hook: PostgresHook, df: pd.DataFrame, table_name: str) -> None:
+def batch_insert_data(
+    postgres_hook: PostgresHook, df: pd.DataFrame, table_name: str
+) -> None:
     """Insert data in batches"""
     try:
         # Convert DataFrame to native Python types
         df = df.astype(object)  # Convert all columns to object type first
         df = df.where(pd.notnull(df), None)  # Replace NaN with None
-        
+
         # Get connection and cursor
         conn = postgres_hook.get_conn()
         cur = conn.cursor()
-        
+
         # Get column names
         columns = df.columns.tolist()
-        
+
         # Convert DataFrame to list of tuples
         values = df.to_records(index=False).tolist()
-        
+
         # Construct insert query
         insert_query = f"""
             INSERT INTO {table_name} ({','.join(columns)})
             VALUES %s
             ON CONFLICT DO NOTHING;
         """
-        
+
         # Execute in batches using execute_values
         batch_size = 1000
         execute_values(cur, insert_query, values, page_size=batch_size)
-        
+
         # Commit the transaction
         conn.commit()
-        
+
     except Exception as e:
         raise AirflowException(f"Failed to insert data: {str(e)}")
     finally:
-        if 'cur' in locals():
+        if "cur" in locals():
             cur.close()
