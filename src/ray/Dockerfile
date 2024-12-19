@@ -1,4 +1,4 @@
-FROM rayproject/ray:2.9.0-py39
+FROM rayproject/ray:2.40.0-py39
 
 USER root
 
