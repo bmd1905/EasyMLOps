@@ -11,6 +11,7 @@ dependencies = [
     "botocore>=1.35.77",
     "kafka-python>=2.0.2",
     "loguru==0.7.0",
+    "mlflow>=2.19.0",
     "psycopg2-binary==2.9.10",
     "pyarrow==8.0.0",
     "pydantic-settings==2.0.2",

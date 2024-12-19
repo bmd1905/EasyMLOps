@@ -1,6 +1,7 @@
+import os
 from datetime import timedelta
 from pathlib import Path
-import os
+
 import pendulum
 
 from ray import tune
@@ -52,7 +53,7 @@ TRAINING_CONFIG = {
     "num_workers": 3,
     "resources_per_worker": {"CPU": 2},
     "use_gpu": False,
-    "num_boost_round": 3,
+    "num_boost_round": 1,
 }
 
 # XGBoost Parameters
@@ -60,7 +61,7 @@ XGBOOST_PARAMS = {
     "objective": "binary:logistic",
     "eval_metric": ["logloss", "error", "rmse", "mae", "auc"],
     "tree_method": "hist",
-    "max_depth": 6,
+    "max_depth": 1,
     "eta": 0.3,
     "subsample": 0.8,
     "colsample_bytree": 0.8,
@@ -101,9 +102,9 @@ DEFAULT_ARGS = {
 # Tune Configuration
 TUNE_CONFIG = {
     "model_path": "model-checkpoints/hyperparameter-tuning/xgb_model",
-    "num_trials": 5,  # Number of trials for hyperparameter search
-    "max_epochs": 4,  # Maximum epochs per trial
-    "grace_period": 2,  # Minimum epochs before pruning
+    "num_trials": 1,  # Number of trials for hyperparameter search
+    "max_epochs": 1,  # Maximum epochs per trial
+    "grace_period": 1,  # Minimum epochs before pruning
     "mlflow_tracking_uri": os.getenv(
         "MLFLOW_TRACKING_URI", "http://mlflow_server:5000"
     ),
@@ -118,3 +119,6 @@ TUNE_SEARCH_SPACE = {
     "colsample_bytree": tune.uniform(0.5, 1.0),
     "gamma": tune.uniform(0, 1),
 }
+
+# Model Configuration
+MODEL_NAME = "purchase_prediction_model"
