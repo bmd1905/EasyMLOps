@@ -19,6 +19,7 @@ from include.config.tune_config import DEFAULT_ARGS  # noqa: E402
     schedule="@weekly",
     catchup=False,
     tags=["training", "ml"],
+    max_active_runs=5,
 )
 def training_pipeline():
     """

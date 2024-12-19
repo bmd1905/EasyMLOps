@@ -1,44 +1,59 @@
-import logging
-
 from ray_provider.decorators import ray
 
 from include.config.tune_config import RAY_TASK_CONFIG
-
-logger = logging.getLogger(__name__)
 
 
 @ray.task(config=RAY_TASK_CONFIG)
 def train_final_model(data: dict, best_params: dict) -> dict:
     """Train final model with best parameters"""
 
+    from datetime import datetime
+
     import pandas as pd
     import pyarrow.fs
 
+    import mlflow
     import ray
     from airflow.exceptions import AirflowException
     from include.config.tune_config import (
         MINIO_CONFIG,
         TRAINING_CONFIG,
+        TUNE_CONFIG,
         TUNE_SEARCH_SPACE,
+        XGBOOST_PARAMS,
     )
+    from ray.air.integrations.mlflow import MLflowLoggerCallback
     from ray.train import CheckpointConfig, RunConfig, ScalingConfig
     from ray.train.xgboost import XGBoostTrainer
 
     try:
-        # Validate and process parameters
+        # Set MLflow tracking URI
+        mlflow.set_tracking_uri(TUNE_CONFIG["mlflow_tracking_uri"])
+
+        # Create experiment if it doesn't exist or is deleted
+        experiment_name = f"xgb_final_model_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+        experiment = mlflow.get_experiment_by_name(experiment_name)
+        if experiment is None or experiment.lifecycle_stage == "deleted":
+            mlflow.create_experiment(experiment_name)
+            experiment = mlflow.get_experiment_by_name(experiment_name)
+
+        # Merge base XGBoost params with best params
         if not best_params or "best_config" not in best_params:
             # Convert search space to concrete values using median of ranges
-            model_params = {
+            tuning_params = {
                 k: v.sample() if hasattr(v, "sample") else v
                 for k, v in TUNE_SEARCH_SPACE.items()
             }
         else:
-            model_params = best_params["best_config"]
+            tuning_params = best_params["best_config"]
 
         # Ensure all parameters are concrete values
-        for k, v in model_params.items():
+        for k, v in tuning_params.items():
             if hasattr(v, "sample"):
-                model_params[k] = v.sample()
+                tuning_params[k] = v.sample()
+
+        # Merge base params with tuning params
+        model_params = {**XGBOOST_PARAMS, **tuning_params}
 
         # Setup similar to original training but with best params
         df = pd.DataFrame(data["data"])
@@ -50,7 +65,14 @@ def train_final_model(data: dict, best_params: dict) -> dict:
         run_config = RunConfig(
             storage_filesystem=fs,
             storage_path=TRAINING_CONFIG["model_path"],
-            name="xgb_final_model",
+            name=experiment_name,
+            callbacks=[
+                MLflowLoggerCallback(
+                    tracking_uri=TUNE_CONFIG["mlflow_tracking_uri"],
+                    experiment_name=experiment_name,
+                    save_artifact=True,
+                )
+            ],
             checkpoint_config=CheckpointConfig(
                 checkpoint_frequency=1,
                 num_to_keep=1,
@@ -72,8 +94,18 @@ def train_final_model(data: dict, best_params: dict) -> dict:
         )
 
         result = trainer.fit()
+
+        # Transform metrics to match expected format
+        metrics = {
+            "train_rmse": result.metrics.get("train-rmse", float("inf")),
+            "train_logloss": result.metrics.get("train-logloss", float("inf")),
+            "train_error": result.metrics.get("train-error", float("inf")),
+            "train_auc": result.metrics.get("train-auc", 0.0),
+            "train_mae": result.metrics.get("train-mae", float("inf")),
+        }
+
         return {
-            "metrics": result.metrics,
+            "metrics": metrics,
             "checkpoint_path": result.checkpoint.path,
             "best_params": best_params or {"best_config": model_params},
         }

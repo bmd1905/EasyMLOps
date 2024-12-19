@@ -1,6 +1,6 @@
 from datetime import timedelta
 from pathlib import Path
-
+import os
 import pendulum
 
 from ray import tune
@@ -28,8 +28,11 @@ RAY_TASK_CONFIG = {
             "tensorboardX==2.6.2",
             "pyarrow",
             "optuna==4.1.0",
+            "mlflow==2.19.0",
+            "loguru",
         ],
     },
+    "num_cpus": 10,
     "poll_interval": 5,
     "xcom_task_key": "dashboard",
 }
@@ -44,12 +47,12 @@ MINIO_CONFIG = {
 
 # Training Configuration
 TRAINING_CONFIG = {
-    "model_path": "model-checkpoints-bucket/xgb_model",
+    "model_path": "model-checkpoints/final-model/xgb_model",
     "test_size": 0.3,
-    "num_workers": 2,
-    "resources_per_worker": {"CPU": 3},
+    "num_workers": 3,
+    "resources_per_worker": {"CPU": 2},
     "use_gpu": False,
-    "num_boost_round": 5,
+    "num_boost_round": 3,
 }
 
 # XGBoost Parameters
@@ -97,14 +100,18 @@ DEFAULT_ARGS = {
 
 # Tune Configuration
 TUNE_CONFIG = {
-    "num_trials": 1,  # Number of trials for hyperparameter search
-    "max_epochs": 1,  # Maximum epochs per trial
-    "grace_period": 1,  # Minimum epochs before pruning
+    "model_path": "model-checkpoints/hyperparameter-tuning/xgb_model",
+    "num_trials": 5,  # Number of trials for hyperparameter search
+    "max_epochs": 4,  # Maximum epochs per trial
+    "grace_period": 2,  # Minimum epochs before pruning
+    "mlflow_tracking_uri": os.getenv(
+        "MLFLOW_TRACKING_URI", "http://mlflow_server:5000"
+    ),
 }
 
 # Tune Search Space
 TUNE_SEARCH_SPACE = {
-    "max_depth": tune.randint(3, 10),
+    "max_depth": tune.randint(3, 5),
     "learning_rate": tune.loguniform(1e-4, 1e-1),
     "min_child_weight": tune.choice([1, 2, 3, 4, 5]),
     "subsample": tune.uniform(0.5, 1.0),
