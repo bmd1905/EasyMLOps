@@ -1,0 +1,89 @@
+services:
+  # CDC platform to capture changes in DB
+  # and stream them to Kafka
+  debezium:
+    platform: linux/x86_64
+    image: debezium/connect:1.9
+    container_name: cdc-debezium
+    depends_on:
+      cdc-postgresql:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'curl',
+          '--silent',
+          '--fail',
+          '-X',
+          'GET',
+          'http://localhost:8083/connectors',
+        ]
+      start_period: 10s
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "8088:8083"
+    environment:
+      BOOTSTRAP_SERVERS: broker:29092
+      GROUP_ID: 1
+      CONFIG_STORAGE_TOPIC: connect_configs
+      OFFSET_STORAGE_TOPIC: connect_offsets
+      # Set to Avro for higher performance
+      # KEY_CONVERTER: io.confluent.connect.avro.AvroConverter
+      # VALUE_CONVERTER: io.confluent.connect.avro.AvroConverter
+      KEY_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      CONNECT_KEY_CONVERTER_SCHEMA_REGISTRY_URL: http://schema-registry:8081
+      CONNECT_VALUE_CONVERTER_SCHEMA_REGISTRY_URL: http://schema-registry:8081
+      CONNECT_TOPIC_CREATION_ENABLE: true
+    networks:
+      - easydatapipeline_default
+
+  # Debezium UI
+  debezium-ui:
+    platform: linux/x86_64
+    image: debezium/debezium-ui:latest
+    container_name: debezium-ui
+    hostname: debezium-ui
+    depends_on:
+      debezium:
+        condition: service_healthy
+    ports:
+      - '8082:8080'
+    environment:
+      KAFKA_CONNECT_URIS: http://debezium:8083
+    networks:
+      - easydatapipeline_default
+
+  # CDC Postgres
+  cdc-postgresql:
+    # Set wal_level from replica (default) to logical
+    # so that Debezium can capture change
+    platform: linux/x86_64
+    image: postgres:latest
+    command: ['postgres', '-c', 'wal_level=logical']
+    container_name: cdc-postgresql
+    healthcheck:
+      test: ['CMD', 'psql', '-U', 'cdc', '-c', 'SELECT 1']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "5434:5432"
+    environment:
+      - POSTGRES_DB=cdc
+      - POSTGRES_USER=cdc
+      - POSTGRES_PASSWORD=cdc
+    volumes:
+      - cdc_postgres_data:/var/lib/postgresql/data
+    networks:
+      - easydatapipeline_default
+
+volumes:
+  cdc_postgres_data:
+
+networks:
+  easydatapipeline_default:
+    external: true
