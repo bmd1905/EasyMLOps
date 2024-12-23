@@ -1,6 +1,7 @@
 import os
 
 from dotenv import load_dotenv
+
 from .postgresql_client import PostgresSQLClient
 
 load_dotenv()
@@ -23,12 +24,12 @@ def main():
         CREATE TABLE IF NOT EXISTS events (
             event_time TIMESTAMP,
             event_type VARCHAR(50),
-            product_id NUMERIC,
-            category_id NUMERIC,
+            product_id BIGINT,
+            category_id BIGINT,
             category_code VARCHAR(255),
             brand VARCHAR(255),
-            price FLOAT,
-            user_id NUMERIC,
+            price DOUBLE PRECISION,
+            user_id BIGINT,
             user_session VARCHAR(255)
         );
     """

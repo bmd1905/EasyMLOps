@@ -105,7 +105,7 @@ def main():
             print(f"Failed to insert record: {str(e)}")
             invalid_records += 1
 
-        sleep(1)
+        sleep(0.0001)
 
     print("\nFinal Summary:")
     print(f"Total records processed: {len(records)}")
