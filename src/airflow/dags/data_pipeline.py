@@ -116,6 +116,18 @@ def gold_layer(transformed_data: Dict[str, Any]) -> bool:
     return True
 
 
+# @task
+# def debug_data(data: Dict[str, Any], layer: str):
+#     """Debug task to inspect data between layers"""
+#     if data and "data" in data:
+#         df = pd.DataFrame(data["data"])
+#         logger.info(f"=== {layer} Layer Data ===")
+#         logger.info(f"Columns: {df.columns.tolist()}")
+#         logger.info(f"Shape: {df.shape}")
+#         logger.info(f"First row: {df.iloc[0].to_dict()}")
+#     return data
+
+
 @dag(
     dag_id="data_pipeline",
     default_args=default_args,
@@ -146,6 +158,7 @@ def data_pipeline():
     # Execute layers with proper error handling
     with TaskGroup("bronze_layer_group") as bronze_group:
         validated_data = bronze_layer(config)
+        # validated_data = debug_data(validated_data, "Bronze")
 
     with TaskGroup("silver_layer_group") as silver_group:
         transformed_data = silver_layer(validated_data)
