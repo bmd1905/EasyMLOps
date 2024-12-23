@@ -185,3 +185,17 @@ test-feature-store:
 
 # Combined command to start everything
 run-feature-store: up-online-store up-dwh setup-feature-store materialize-features start-feature-service
+
+
+# ------------------------------------------ Pipeline Commands ------------------------------------------
+
+# Data pipeline
+up-data-pipeline:
+	make up-network
+	make up-kafka
+	make up-cdc
+	make up-airflow
+	make up-data-lake
+	make up-dwh
+	make cdc_setup
+	make deploy_s3_connector
