@@ -1,5 +1,5 @@
 {
-  "name": "cdc-postgresql-v3",
+  "name": "cdc-postgresql",
   "config": {
     "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
     "database.hostname": "cdc-postgresql",
@@ -9,6 +9,6 @@
     "database.dbname": "cdc",
     "plugin.name": "pgoutput",
     "database.server.name": "cdc_",
-    "table.include.list": "public.devices"
+    "table.include.list": "public.events"
   }
 }

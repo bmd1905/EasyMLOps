@@ -14,18 +14,22 @@ def main():
         password=os.getenv("POSTGRES_PASSWORD"),
     )
 
-    # Create devices table
+    # Drop events table if exists
+    drop_table_query = "DROP TABLE IF EXISTS events;"
+    pc.execute_query(drop_table_query)
+
+    # Create events table with NUMERIC for IDs and longer VARCHAR fields
     create_table_query = """
-        CREATE TABLE IF NOT EXISTS devices (
-            device_id INT,
-            created VARCHAR(30),
-            feature_0 FLOAT,
-            feature_4 FLOAT,
-            feature_8 FLOAT,
-            feature_6 FLOAT,
-            feature_2 FLOAT,
-            feature_9 FLOAT,
-            feature_3 FLOAT
+        CREATE TABLE IF NOT EXISTS events (
+            event_time TIMESTAMP,
+            event_type VARCHAR(50),
+            product_id NUMERIC,
+            category_id NUMERIC,
+            category_code VARCHAR(255),
+            brand VARCHAR(255),
+            price FLOAT,
+            user_id NUMERIC,
+            user_session VARCHAR(255)
         );
     """
     try:

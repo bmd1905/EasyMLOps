@@ -30,8 +30,8 @@ cdc_setup:
 	uv run bash src/cdc/run.sh register_connector src/cdc/configs/postgresql-cdc.json
 
 insert_cdc_data:
-	uv run $(PYTHON) -m src.cdc.test.utils.create_table
-	uv run $(PYTHON) -m src.cdc.test.utils.insert_data
+	uv run $(PYTHON) -m src.cdc.create_table
+	uv run $(PYTHON) -m src.cdc.insert_data
 
 # Docker Compose Commands
 up-network:

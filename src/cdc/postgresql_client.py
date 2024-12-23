@@ -23,14 +23,21 @@ class PostgresSQLClient:
         # Creating a cursor object using the cursor() method
         return conn
 
-    def execute_query(self, query):
+    def execute_query(self, query, values=None):
         conn = self.create_conn()
         cursor = conn.cursor()
-        cursor.execute(query)
-        print("A new record has been inserted successfully!")
-        conn.commit()
-        # Closing the connection
-        conn.close()
+        try:
+            if values:
+                cursor.execute(query, values)
+            else:
+                cursor.execute(query)
+            conn.commit()
+            print("Query executed successfully!")
+        except Exception as e:
+            print(f"Error executing query: {str(e)}")
+            raise
+        finally:
+            conn.close()
 
     def get_columns(self, table_name):
         engine = create_engine(
