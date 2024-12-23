@@ -54,7 +54,7 @@ def create_topic(admin, topic_name):
     # Create topic if not exists
     try:
         # Create Kafka topic
-        topic = NewTopic(name=topic_name, num_partitions=1, replication_factor=1)
+        topic = NewTopic(name=topic_name, num_partitions=12, replication_factor=1)
         admin.create_topics([topic])
         print(f"A new topic {topic_name} has been created!")
     except Exception:

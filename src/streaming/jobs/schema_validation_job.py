@@ -167,36 +167,53 @@ def validate_schema_against_payload(schema: Dict, payload: Dict) -> bool:
 def validate_schema(record: str) -> dict:
     """
     Validate the schema of the record.
-
-    Args:
-        record: JSON string containing schema and payload
-
-    Returns:
-        dict: A dictionary containing validation results
     """
-    # Increment request counter
     request_counter.increment()
 
-    # Convert string to dict if needed
-    record_dict = json.loads(record)  # if isinstance(record, str) else record
+    try:
+        record_dict = json.loads(record) if isinstance(record, str) else record
 
-    payload = record_dict["payload"]
-    schema = record_dict["schema"]
+        # Add source topic tracking if not present
+        if "metadata" not in record_dict:
+            record_dict["metadata"] = {}
 
-    # Validate schema against payload
-    valid, error_message, error_type = validate_schema_against_payload(schema, payload)
-    record_dict["valid"] = "VALID" if valid else "INVALID"
-    record_dict["error_message"] = error_message
-    record_dict["error_type"] = error_type
-    # print("Schema validation result: ", valid)
+        payload = record_dict["payload"]
+        schema = record_dict["schema"]
 
-    return json.dumps(record_dict)
+        # Validate schema against payload
+        valid, error_message, error_type = validate_schema_against_payload(
+            schema, payload
+        )
+
+        # Add validation results
+        record_dict["valid"] = "VALID" if valid else "INVALID"
+        record_dict["error_message"] = error_message
+        record_dict["error_type"] = error_type
+
+        # Add processing timestamp
+        record_dict["metadata"]["processed_at"] = datetime.utcnow().isoformat()
+
+        return json.dumps(record_dict)
+    except Exception as e:
+        # Handle parsing/processing errors
+        return json.dumps(
+            {
+                "valid": "INVALID",
+                "error_message": f"Processing error: {str(e)}",
+                "error_type": "PROCESSING_ERROR",
+                "raw_data": record,
+                "metadata": {"processed_at": datetime.utcnow().isoformat()},
+            }
+        )
 
 
 class SchemaValidationJob(FlinkJob):
     def __init__(self):
         self.jars_path = f"{os.getcwd()}/src/streaming/connectors/config/jars/"
-        self.input_topics = os.getenv("KAFKA_INPUT_TOPICS", "raw-events-topic")
+        # Support comma-separated topics
+        self.input_topics = os.getenv("KAFKA_INPUT_TOPICS", "raw-events-topic").split(
+            ","
+        )
         self.group_id = os.getenv("KAFKA_GROUP_ID", "flink-group")
         self.valid_topic = os.getenv("KAFKA_VALID_TOPIC", "validated-events-topic")
         self.invalid_topic = os.getenv(
@@ -209,7 +226,7 @@ class SchemaValidationJob(FlinkJob):
         return "schema_validation"
 
     def create_pipeline(self, env: StreamExecutionEnvironment):
-        # Set parallelism
+        # Set parallelism for better performance
         env.set_parallelism(4)
 
         # Add required JARs
@@ -218,12 +235,15 @@ class SchemaValidationJob(FlinkJob):
             f"file://{self.jars_path}/kafka-clients-3.4.0.jar",
         )
 
-        # Create source
-        source = build_source(
-            topics=self.input_topics,
-            group_id=self.group_id,
-            bootstrap_servers=self.bootstrap_servers,
-        )
+        # Create source for each input topic
+        sources = []
+        for topic in self.input_topics:
+            source = build_source(
+                topics=topic.strip(),  # Handle whitespace
+                group_id=f"{self.group_id}-{topic}",  # Unique group ID per topic
+                bootstrap_servers=self.bootstrap_servers,
+            )
+            sources.append(source)
 
         # Create sinks
         valid_sink = build_sink(
@@ -236,14 +256,34 @@ class SchemaValidationJob(FlinkJob):
             bootstrap_servers=self.bootstrap_servers,
         )
 
-        # Build pipeline
-        stream = env.from_source(
-            source, WatermarkStrategy.no_watermarks(), "Schema Validation Job"
+        # Create streams from all sources
+        streams = []
+        for i, source in enumerate(sources):
+            stream = env.from_source(
+                source,
+                WatermarkStrategy.no_watermarks(),
+                f"Schema Validation Job - Source {i+1}",
+            )
+            streams.append(stream)
+
+        # Union all streams if multiple sources exist
+        if len(streams) > 1:
+            combined_stream = streams[0]
+            for stream in streams[1:]:
+                combined_stream = combined_stream.union(stream)
+        else:
+            combined_stream = streams[0]
+
+        # Process combined stream
+        validated_stream = combined_stream.map(
+            validate_schema, output_type=Types.STRING()
         )
 
-        # Process stream and get valid and invalid streams
-        validated_stream = stream.map(validate_schema, output_type=Types.STRING())
+        # Route to appropriate sinks
+        validated_stream.filter(lambda x: json.loads(x)["valid"] == "INVALID").sink_to(
+            sink=invalid_sink
+        )
 
-        # # Sink streams to respective topics
-        validated_stream.filter(lambda x: "INVALID" in x).sink_to(sink=invalid_sink)
-        validated_stream.filter(lambda x: "VALID" in x).sink_to(sink=valid_sink)
+        validated_stream.filter(lambda x: json.loads(x)["valid"] == "VALID").sink_to(
+            sink=valid_sink
+        )

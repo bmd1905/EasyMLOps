@@ -1,0 +1,14 @@
+{
+  "name": "cdc-postgresql",
+  "config": {
+    "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+    "database.hostname": "cdc-postgresql",
+    "database.port": "5432",
+    "database.user": "cdc",
+    "database.password": "cdc",
+    "database.dbname": "cdc",
+    "plugin.name": "pgoutput",
+    "database.server.name": "cdc_",
+    "table.include.list": "public.events"
+  }
+}

@@ -10,6 +10,7 @@ ONLINE_STORE_COMPOSE_FILE := docker-compose.online-store.yaml
 RAY_COMPOSE_FILE := src/ray/docker-compose.ray.yaml
 MONITOR_COMPOSE_FILE := docker-compose.monitor.yaml
 MLFLOW_COMPOSE_FILE := docker-compose.mlflow.yaml
+CDC_COMPOSE_FILE := docker-compose.cdc.yaml
 PYTHON := python3
 
 # Data Ingestion and Streaming Tests
@@ -25,6 +26,12 @@ deploy_s3_connector:
 alert_invalid_events:
 	uv run $(PYTHON) -m src.streaming.main alert_invalid_events
 
+cdc_setup:
+	uv run bash src/cdc/run.sh register_connector src/cdc/configs/postgresql-cdc.json
+
+insert_cdc_data:
+	uv run $(PYTHON) -m src.cdc.create_table
+	uv run $(PYTHON) -m src.cdc.insert_data
 
 # Docker Compose Commands
 up-network:
@@ -55,6 +62,9 @@ up-monitor:
 up-mlflow:
 	docker compose -f $(MLFLOW_COMPOSE_FILE) up -d --build
 
+up-cdc:
+	docker compose -f $(CDC_COMPOSE_FILE) up -d --build
+
 down-network:
 	docker network rm easydatapipeline_default
 
@@ -82,6 +92,9 @@ down-monitor:
 down-mlflow:
 	docker compose -f $(MLFLOW_COMPOSE_FILE) down -v
 
+down-cdc:
+	docker compose -f $(CDC_COMPOSE_FILE) down -v
+
 restart-kafka: down-kafka up-kafka
 restart-airflow: down-airflow up-airflow
 restart-data-lake: down-data-lake up-data-lake
@@ -90,10 +103,11 @@ restart-online-store: down-online-store up-online-store
 restart-ray-cluster: down-ray-cluster up-ray-cluster
 restart-monitor: down-monitor up-monitor
 restart-mlflow: down-mlflow up-mlflow
+restart-cdc: down-cdc up-cdc
 
 # Convenience Commands
 up: up-network up-kafka up-airflow up-data-lake up-dwh up-online-store up-ray-cluster up-monitor up-mlflow deploy_s3_connector
-down: down-kafka down-airflow down-data-lake down-dwh down-online-store down-ray-cluster down-monitor down-network
+down: down-kafka down-airflow down-data-lake down-dwh down-online-store down-ray-cluster down-monitor down-network down-cdc
 restart: down up
 
 # Utility Commands
@@ -121,6 +135,9 @@ logs-monitor:
 logs-mlflow:
 	docker compose -f $(MLFLOW_COMPOSE_FILE) logs -f
 
+logs-cdc:
+	docker compose -f $(CDC_COMPOSE_FILE) logs -f
+
 clean:
 	docker compose -f $(KAFKA_COMPOSE_FILE) down -v
 	docker compose -f $(AIRFLOW_COMPOSE_FILE) down -v
@@ -130,6 +147,7 @@ clean:
 	docker compose -f $(RAY_COMPOSE_FILE) down -v
 	docker compose -f $(MONITOR_COMPOSE_FILE) down -v
 	docker compose -f $(MLFLOW_COMPOSE_FILE) down -v
+	docker compose -f $(CDC_COMPOSE_FILE) down -v
 	docker system prune -f
 
 view-topics:
@@ -167,3 +185,17 @@ test-feature-store:
 
 # Combined command to start everything
 run-feature-store: up-online-store up-dwh setup-feature-store materialize-features start-feature-service
+
+
+# ------------------------------------------ Pipeline Commands ------------------------------------------
+
+# Data pipeline
+up-data-pipeline:
+	make up-network
+	make up-kafka
+	make up-cdc
+	make up-airflow
+	make up-data-lake
+	make up-dwh
+	make cdc_setup
+	make deploy_s3_connector

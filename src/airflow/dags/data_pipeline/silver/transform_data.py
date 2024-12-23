@@ -38,10 +38,29 @@ def split_category_code(category_code: str) -> tuple:
 def transform_timestamps(df: pd.DataFrame) -> pd.DataFrame:
     """Convert event_time to datetime and add derived time columns"""
     logger.debug("Transforming timestamps")
-    df["event_timestamp"] = pd.to_datetime(df["event_time"])
+    # Debug log the columns we have
+    logger.debug(f"Available columns: {df.columns.tolist()}")
+
+    # Check if event_time exists, if not try alternative column names
+    timestamp_column = None
+    possible_columns = ["event_time", "timestamp", "event_timestamp"]
+
+    for col in possible_columns:
+        if col in df.columns:
+            timestamp_column = col
+            break
+
+    if timestamp_column is None:
+        raise ValueError(
+            f"No timestamp column found. Available columns: {df.columns.tolist()}"
+        )
+
+    # Convert timestamp
+    df["event_timestamp"] = pd.to_datetime(df[timestamp_column])
     df["event_date"] = df["event_timestamp"].dt.date
     df["event_hour"] = df["event_timestamp"].dt.hour
     df["day_of_week"] = df["event_timestamp"].dt.day_name()
+
     logger.info(f"Transformed timestamps: {len(df)} records processed.")
     return df
 
@@ -119,14 +138,21 @@ def transform_data(validated_data: Dict[str, Any]) -> Dict[str, Any]:
     """Transform the validated data"""
     logger.info("Starting data transformation")
     try:
-        # Convert to DataFrame
+        # Convert to DataFrame and log initial state
         df = pd.DataFrame(validated_data["data"])
+        logger.debug(f"Initial DataFrame columns: {df.columns.tolist()}")
+        logger.debug(f"DataFrame shape: {df.shape}")
 
         # Check and remove duplicates
         df = check_duplicates(df)
 
-        # Apply transformations
-        df = transform_timestamps(df)
+        # Apply transformations with better error handling
+        try:
+            df = transform_timestamps(df)
+        except Exception as e:
+            logger.error(f"Failed to transform timestamps: {str(e)}")
+            raise
+
         df = add_derived_columns(df)
         df = calculate_session_metrics(df)
 
@@ -151,5 +177,5 @@ def transform_data(validated_data: Dict[str, Any]) -> Dict[str, Any]:
         return {"data": serializable_data, "metrics": metrics}
 
     except Exception as e:
-        logger.error(f"Failed to transform data: {str(e)}")
+        logger.error(f"Failed to transform data: {str(e)}", exc_info=True)
         raise Exception(f"Failed to transform data: {str(e)}")
