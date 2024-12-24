@@ -4,9 +4,12 @@ from feast import FeatureStore
 from feast.errors import FeatureViewNotFoundException
 from loguru import logger
 
+from ray import serve
 
+
+@serve.deployment(num_replicas=1)
 class OnlineFeatureService:
-    def __init__(self, repo_path: str = "."):
+    def __init__(self, repo_path: str = "./feature_stores"):
         self.store = FeatureStore(repo_path=repo_path)
 
     def get_online_features(self, user_id: int, product_id: int) -> Dict[str, Any]:

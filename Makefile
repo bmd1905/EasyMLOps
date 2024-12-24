@@ -196,3 +196,14 @@ up-data-pipeline:
 up-training-pipeline:
 	make up-ray-cluster
 	make up-mlflow
+
+up-serving:
+	docker compose -f src/serving/docker-compose.serving.yaml up -d --build
+
+logs-serving:
+	docker compose -f src/serving/docker-compose.serving.yaml logs -f
+
+down-serving:
+	docker compose -f src/serving/docker-compose.serving.yaml down
+
+restart-serving: down-serving up-serving

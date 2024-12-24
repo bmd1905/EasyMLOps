@@ -14,7 +14,15 @@ services:
     volumes:
       - db_data:/var/lib/postgresql/data/
     healthcheck:
-      test: ["CMD", "pg_isready", "-p", "${PG_PORT:-5432}", "-U", "${PG_USER:-mlflow}"]
+      test:
+        [
+          "CMD",
+          "pg_isready",
+          "-p",
+          "${PG_PORT:-5432}",
+          "-U",
+          "${PG_USER:-mlflow}",
+        ]
       interval: 5s
       timeout: 5s
       retries: 3

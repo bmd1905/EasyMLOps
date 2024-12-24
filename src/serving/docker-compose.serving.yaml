@@ -1,0 +1,15 @@
+services:
+  serving:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - RAY_ADDRESS=ray://ray-head:10001
+      - RAY_SERVE_ENABLE_RUNTIME_ENV_SETUP=1
+      - MLFLOW_TRACKING_URI=http://tracking_server:5000
+    networks:
+      - easydatapipeline_default
+
+networks:
+  easydatapipeline_default:
+    external: true
