@@ -10,7 +10,8 @@ user_source = PostgreSQLSource(
         user_id,
         event_count as activity_count,
         unique_products_viewed,
-        session_start as event_timestamp
+        session_start as event_timestamp,
+        user_session
     FROM dwh.vw_user_session_summary
     """,
     timestamp_field="event_timestamp",
