@@ -1,4 +1,3 @@
-# This is an example feature definition file
 from feast.infra.offline_stores.contrib.postgres_offline_store.postgres_source import (
     PostgreSQLSource,
 )

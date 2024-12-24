@@ -180,13 +180,6 @@ materialize-features:
 start-feature-service:
 	cd src/feature_stores && source .venv/bin/activate && uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
 
-test-feature-store:
-	cd src/feature_stores && source .venv/bin/activate && python test_features.py
-
-# Combined command to start everything
-run-feature-store: up-online-store up-dwh setup-feature-store materialize-features start-feature-service
-
-
 # ------------------------------------------ Pipeline Commands ------------------------------------------
 
 # Data pipeline
