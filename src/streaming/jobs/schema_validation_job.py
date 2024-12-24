@@ -1,9 +1,9 @@
 import json
 import os
-from datetime import datetime
-from typing import Any, Dict, List, Union
-from threading import Lock
 import time
+from datetime import datetime
+from threading import Lock
+from typing import Any, Dict, Tuple
 
 from pyflink.common import WatermarkStrategy
 from pyflink.common.typeinfo import Types
@@ -14,7 +14,6 @@ from ..connectors.sources.kafka_source import build_source
 from ..jobs.base import FlinkJob
 
 
-# Replace the global counter with a more sophisticated counter class
 class RequestCounter:
     def __init__(self):
         self.count = 0
@@ -25,192 +24,154 @@ class RequestCounter:
         with self.lock:
             self.count += 1
             current_time = time.time()
-            # Log every second
             if current_time - self.last_log_time >= 1.0:
                 print(f"Processed {self.count} records in the last second")
                 self.count = 0
                 self.last_log_time = current_time
 
 
-# Initialize the counter
 request_counter = RequestCounter()
 
 
-def validate_field_type(
-    field_value: Any, field_type: Union[str, List[str]], field_name: str
-) -> bool:
-    """
-    Validate a single field's type against the expected schema type.
-    """
-    # Handle union types (e.g., ['null', 'string'])
-    if isinstance(field_type, list):
-        # If any type validation passes, the field is valid
-        return any(validate_field_type(field_value, t, field_name) for t in field_type)
+def validate_field_type(value: Any, field_def: Dict) -> bool:
+    """Validate a field's type against its schema definition."""
+    field_type = (
+        field_def.get("name")
+        if field_def.get("name", "").startswith("io.debezium.time")
+        else field_def["type"]
+    )
 
-    # Handle null values
-    if field_type == "null":
-        return field_value is None
+    # Handle null values for optional fields
+    if value is None:
+        return field_def.get("optional", False)
 
-    # Type mapping between schema types and Python types
-    type_mapping = {
-        "string": str,
-        "long": (int,),  # Using tuple for multiple valid types
-        "double": (float, int),  # Both float and int are valid for double
-        "boolean": bool,
-        "int": int,
+    type_validators = {
+        "string": lambda v: isinstance(v, str),
+        "int64": lambda v: isinstance(v, int),
+        "double": lambda v: isinstance(v, (float, int)),
+        "boolean": lambda v: isinstance(v, bool),
+        "io.debezium.time.MicroTimestamp": lambda v: isinstance(v, int) and v >= 0,
+        "io.debezium.time.Timestamp": lambda v: isinstance(v, int) and v >= 0,
+        "io.debezium.time.ZonedTimestamp": lambda v: isinstance(v, str)
+        and _is_valid_timestamp(v),
     }
 
-    if field_type not in type_mapping:
-        raise ValueError(f"Unsupported type in schema: {field_type}")
+    validator = type_validators.get(field_type)
+    return validator and validator(value)
 
-    expected_types = type_mapping[field_type]
-    if not isinstance(expected_types, tuple):
-        expected_types = (expected_types,)
 
-    # Special handling for string fields that should be datetime
-    if field_type == "string" and field_name == "event_time":
+def _is_valid_timestamp(value: str) -> bool:
+    """Check if a string is a valid timestamp."""
+    timestamp_formats = [
+        "%Y-%m-%dT%H:%M:%S.%fZ",
+        "%Y-%m-%dT%H:%M:%SZ",
+        "%Y-%m-%d %H:%M:%S.%f%z",
+        "%Y-%m-%d %H:%M:%S%z",
+    ]
+
+    for fmt in timestamp_formats:
         try:
-            datetime.strptime(field_value, "%Y-%m-%d %H:%M:%S UTC")
+            datetime.strptime(value, fmt)
             return True
         except ValueError:
-            return False
+            continue
+    return False
 
-    return isinstance(field_value, expected_types)
 
+def validate_field_value(value: Any, field_def: Dict) -> Tuple[bool, str]:
+    """Validate a field's value constraints."""
+    field_name = field_def["field"]
 
-def validate_field_value(
-    field_value: Any, field_type: Union[str, List[str]], field_name: str
-) -> bool:
-    """
-    Validate a single field's value against the expected schema value.
-    """
-    # price should be greater than 0
-    if field_name == "price":
-        return field_value > 0, "Price should be greater than 0"
+    if field_name == "price" and value is not None:
+        return (value > 0, "Price should be greater than 0")
 
-    # event type should be one of the following: "view", "cart", "purchase", "remove_from_cart"
-    if field_name == "event_type":
+    if field_name == "event_type" and value is not None:
+        valid_types = ["view", "cart", "purchase", "remove_from_cart"]
         return (
-            field_value in ["view", "cart", "purchase", "remove_from_cart"],
-            "Event type should be one of the following: view, cart, purchase, remove_from_cart",
+            value in valid_types,
+            f"Event type should be one of: {', '.join(valid_types)}",
         )
 
     return True, None
 
 
-def validate_schema_against_payload(schema: Dict, payload: Dict) -> bool:
-    """
-    Validate the schema against the payload.
-
-    Args:
-        schema: The schema definition containing field types
-        payload: The data payload to validate
-
-    Returns:
-        bool: True if payload matches schema, False otherwise
-    """
-    if not isinstance(schema, dict) or not isinstance(payload, dict):
-        return (
-            False,
-            "Schema and payload must be dictionaries",
-            "SCHEMA_VALIDATION_ERROR",
-        )
-
-    if "type" not in schema or schema["type"] != "struct":
-        return (
-            False,
-            "Schema must be a dictionary with a 'type' key set to 'struct'",
-            "SCHEMA_VALIDATION_ERROR",
-        )
-
-    if "fields" not in schema:
-        return (
-            False,
-            "Schema must contain a 'fields' key",
-            "SCHEMA_VALIDATION_ERROR",
-        )
-
-    # Check all required fields are present and have correct types
-    for field in schema["fields"]:
-        field_name = field["name"]
-        field_type = field["type"]
-
-        # Check if field exists in payload
-        if field_name not in payload:
-            # If field has a default value, it's optional
-            if "default" in field:
-                continue
-            return (
-                False,
-                f"Field {field_name} is required",
-                "SCHEMA_VALIDATION_ERROR",
-            )
-
-        # Validate the field's type
-        if not validate_field_type(payload[field_name], field_type, field_name):
-            return (
-                False,
-                f"Field {field_name} has invalid type",
-                "SCHEMA_VALIDATION_ERROR",
-            )
-
-        # Validate the field's value
-        valid, error_message = validate_field_value(
-            payload[field_name], field_type, field_name
-        )
-        if not valid:
-            return False, error_message, "SCHEMA_VALIDATION_ERROR"
-
-    return True, None, None
-
-
-def validate_schema(record: str) -> dict:
-    """
-    Validate the schema of the record.
-    """
+def validate_schema(record: str) -> str:
+    """Validate a record against its schema."""
     request_counter.increment()
 
     try:
         record_dict = json.loads(record) if isinstance(record, str) else record
 
-        # Add source topic tracking if not present
         if "metadata" not in record_dict:
             record_dict["metadata"] = {}
 
-        payload = record_dict["payload"]
         schema = record_dict["schema"]
+        payload = record_dict["payload"]
 
-        # Validate schema against payload
-        valid, error_message, error_type = validate_schema_against_payload(
-            schema, payload
+        # Validate each field
+        for field in schema["fields"]:
+            field_name = field["field"]
+
+            # Check if required field is present
+            if field_name not in payload and not field.get("optional", False):
+                record_dict.update(
+                    {
+                        "valid": "INVALID",
+                        "error_message": f"Field {field_name} is required",
+                        "error_type": "SCHEMA_VALIDATION_ERROR",
+                    }
+                )
+                return json.dumps(record_dict)
+
+            # Skip validation for missing optional fields
+            if field_name not in payload:
+                continue
+
+            # Validate type
+            if not validate_field_type(payload[field_name], field):
+                record_dict.update(
+                    {
+                        "valid": "INVALID",
+                        "error_message": f"Field {field_name} has invalid type",
+                        "error_type": "SCHEMA_VALIDATION_ERROR",
+                    }
+                )
+                return json.dumps(record_dict)
+
+            # Validate value constraints
+            valid, error_msg = validate_field_value(payload[field_name], field)
+            if not valid:
+                record_dict.update(
+                    {
+                        "valid": "INVALID",
+                        "error_message": error_msg,
+                        "error_type": "SCHEMA_VALIDATION_ERROR",
+                    }
+                )
+                return json.dumps(record_dict)
+
+        # All validations passed
+        record_dict.update(
+            {"valid": "VALID", "error_message": None, "error_type": None}
         )
 
-        # Add validation results
-        record_dict["valid"] = "VALID" if valid else "INVALID"
-        record_dict["error_message"] = error_message
-        record_dict["error_type"] = error_type
-
-        # Add processing timestamp
         record_dict["metadata"]["processed_at"] = datetime.utcnow().isoformat()
-
         return json.dumps(record_dict)
+
     except Exception as e:
-        # Handle parsing/processing errors
-        return json.dumps(
-            {
-                "valid": "INVALID",
-                "error_message": f"Processing error: {str(e)}",
-                "error_type": "PROCESSING_ERROR",
-                "raw_data": record,
-                "metadata": {"processed_at": datetime.utcnow().isoformat()},
-            }
-        )
+        data = {
+            "valid": "INVALID",
+            "error_message": f"Processing error: {str(e)}",
+            "error_type": "PROCESSING_ERROR",
+            "raw_data": record,
+            "metadata": {"processed_at": datetime.utcnow().isoformat()},
+        }
+        return json.dumps(data)
 
 
 class SchemaValidationJob(FlinkJob):
     def __init__(self):
         self.jars_path = f"{os.getcwd()}/src/streaming/connectors/config/jars/"
-        # Support comma-separated topics
         self.input_topics = os.getenv("KAFKA_INPUT_TOPICS", "raw-events-topic").split(
             ","
         )
@@ -226,64 +187,41 @@ class SchemaValidationJob(FlinkJob):
         return "schema_validation"
 
     def create_pipeline(self, env: StreamExecutionEnvironment):
-        # Set parallelism for better performance
         env.set_parallelism(4)
-
-        # Add required JARs
         env.add_jars(
             f"file://{self.jars_path}/flink-connector-kafka-1.17.1.jar",
             f"file://{self.jars_path}/kafka-clients-3.4.0.jar",
         )
 
-        # Create source for each input topic
-        sources = []
-        for topic in self.input_topics:
-            source = build_source(
-                topics=topic.strip(),  # Handle whitespace
-                group_id=f"{self.group_id}-{topic}",  # Unique group ID per topic
-                bootstrap_servers=self.bootstrap_servers,
+        # Create sources and sinks
+        sources = [
+            build_source(
+                topic.strip(), f"{self.group_id}-{topic}", self.bootstrap_servers
             )
-            sources.append(source)
+            for topic in self.input_topics
+        ]
 
-        # Create sinks
-        valid_sink = build_sink(
-            topic=self.valid_topic,
-            bootstrap_servers=self.bootstrap_servers,
-        )
+        valid_sink = build_sink(self.valid_topic, self.bootstrap_servers)
+        invalid_sink = build_sink(self.invalid_topic, self.bootstrap_servers)
 
-        invalid_sink = build_sink(
-            topic=self.invalid_topic,
-            bootstrap_servers=self.bootstrap_servers,
-        )
+        # Create and process streams
+        streams = [
+            env.from_source(source, WatermarkStrategy.no_watermarks(), f"Source {i+1}")
+            for i, source in enumerate(sources)
+        ]
 
-        # Create streams from all sources
-        streams = []
-        for i, source in enumerate(sources):
-            stream = env.from_source(
-                source,
-                WatermarkStrategy.no_watermarks(),
-                f"Schema Validation Job - Source {i+1}",
-            )
-            streams.append(stream)
+        combined_stream = streams[0]
+        for stream in streams[1:]:
+            combined_stream = combined_stream.union(stream)
 
-        # Union all streams if multiple sources exist
-        if len(streams) > 1:
-            combined_stream = streams[0]
-            for stream in streams[1:]:
-                combined_stream = combined_stream.union(stream)
-        else:
-            combined_stream = streams[0]
-
-        # Process combined stream
         validated_stream = combined_stream.map(
             validate_schema, output_type=Types.STRING()
         )
 
         # Route to appropriate sinks
         validated_stream.filter(lambda x: json.loads(x)["valid"] == "INVALID").sink_to(
-            sink=invalid_sink
+            invalid_sink
         )
-
         validated_stream.filter(lambda x: json.loads(x)["valid"] == "VALID").sink_to(
-            sink=valid_sink
+            valid_sink
         )

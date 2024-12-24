@@ -2,16 +2,15 @@ import logging
 from typing import Dict, List
 
 import jinja2
-import pandas as pd
-
-from airflow.decorators import task
-from airflow.exceptions import AirflowException
-from airflow.providers.postgres.hooks.postgres import PostgresHook
 from include.common.scripts.sql_utils import load_sql_template
 from include.config.tune_config import (
     CATEGORICAL_COLUMNS,
     FEATURE_COLUMNS,
 )
+
+from airflow.decorators import task
+from airflow.exceptions import AirflowException
+from airflow.providers.postgres.hooks.postgres import PostgresHook
 
 logger = logging.getLogger(__name__)
 
@@ -45,12 +44,25 @@ def load_training_data() -> Dict[str, List[Dict]]:
             f"Converted price column to float. Price range: {df['price'].min()} - {df['price'].max()}"
         )
 
+        # Create and save category mappings during training
+        category_mappings = {}
         for col in CATEGORICAL_COLUMNS:
             logger.debug(f"Encoding categorical column: {col}")
-            df[col] = pd.Categorical(df[col]).codes
+            # Create mapping dictionary for each category
+            unique_values = df[col].dropna().unique()
+            category_mapping = {
+                val: idx for idx, val in enumerate(sorted(unique_values))
+            }
+            category_mappings[col] = category_mapping
+
+            # Apply mapping (with a default for unseen categories)
+            df[col] = df[col].map(category_mapping).fillna(-1)
 
         logger.info("Data preprocessing completed successfully")
-        return {"data": df.to_dict(orient="records")}
+        return {
+            "data": df.to_dict(orient="records"),
+            "category_mappings": category_mappings,
+        }
     except Exception as e:
         logger.error(f"Error in data loading process: {e}", exc_info=True)
         raise AirflowException(f"Failed to load training data: {e}")
