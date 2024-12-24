@@ -1,9 +1,7 @@
 import os
 from time import sleep
-
 import pandas as pd
 from dotenv import load_dotenv
-
 from .postgresql_client import PostgresSQLClient
 
 load_dotenv()
@@ -12,50 +10,36 @@ SAMPLE_DATA_PATH = os.path.join(os.path.dirname(__file__), "data", "sample.parqu
 TABLE_NAME = "events"
 
 
+def format_record(row):
+    record = {
+        "event_time": str(row["event_time"]),
+        "event_type": str(row["event_type"]),
+        "product_id": int(row["product_id"]),
+        "category_id": int(row["category_id"]),
+        "category_code": str(row["category_code"])
+        if pd.notnull(row["category_code"])
+        else None,
+        "brand": str(row["brand"]) if pd.notnull(row["brand"]) else None,
+        "price": max(float(row["price"]), 0),  # Ensure non-negative prices
+        "user_id": int(row["user_id"]),
+        "user_session": str(row["user_session"]),
+    }
+    return record
+
+
 def load_sample_data():
     """Load and prepare sample data from parquet file"""
     try:
-        df = pd.read_parquet(SAMPLE_DATA_PATH)
-        records = df.to_dict("records")
+        df = pd.read_parquet(SAMPLE_DATA_PATH)[:10_000]
+        records = []
+        for idx, row in df.iterrows():
+            record = format_record(row)
+            records.append(record)
         print(f"Loaded {len(records)} records from {SAMPLE_DATA_PATH}")
         return records
     except Exception as e:
         print(f"Error loading sample data: {str(e)}")
         raise
-
-
-def validate_and_transform_record(record: dict, columns: list) -> list:
-    """Validate and transform record values"""
-    try:
-        values = []
-        for col in columns:
-            val = record.get(col)
-
-            # Handle NULL values
-            if pd.isna(val):
-                values.append(None)
-                continue
-
-            # Type conversions and validations
-            if col in ["product_id", "category_id", "user_id"]:
-                values.append(
-                    str(int(val))
-                )  # Convert to string to handle large integers
-            elif col == "price":
-                values.append(float(val))
-            elif col == "event_time":
-                if isinstance(val, str):
-                    values.append(pd.to_datetime(val))
-                else:
-                    values.append(val)
-            else:
-                values.append(str(val))
-
-        return values
-    except Exception as e:
-        print(f"Error processing record: {record}")
-        print(f"Error details: {str(e)}")
-        return None
 
 
 def main():
@@ -84,11 +68,8 @@ def main():
     invalid_records = 0
 
     for record in records:
-        values = validate_and_transform_record(record, columns)
-
-        if values is None:
-            invalid_records += 1
-            continue
+        # Extract values in the correct order
+        values = [record.get(col) for col in columns]
 
         # Insert record
         placeholders = ",".join(["%s"] * len(columns))
@@ -105,7 +86,7 @@ def main():
             print(f"Failed to insert record: {str(e)}")
             invalid_records += 1
 
-        sleep(0.01)
+        sleep(2)
 
     print("\nFinal Summary:")
     print(f"Total records processed: {len(records)}")
