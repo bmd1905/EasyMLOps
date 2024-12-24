@@ -1,7 +1,9 @@
 import os
 from time import sleep
+
 import pandas as pd
 from dotenv import load_dotenv
+
 from .postgresql_client import PostgresSQLClient
 
 load_dotenv()
@@ -11,8 +13,16 @@ TABLE_NAME = "events"
 
 
 def format_record(row):
+    # Convert microseconds timestamp to datetime string in UTC
+    if isinstance(row["event_time"], (int, float)):
+        # Handle microseconds timestamp
+        timestamp = pd.to_datetime(row["event_time"], unit="us")
+    else:
+        # Handle string or datetime timestamp
+        timestamp = pd.to_datetime(row["event_time"])
+
     record = {
-        "event_time": str(row["event_time"]),
+        "event_time": timestamp.strftime("%Y-%m-%d %H:%M:%S UTC"),
         "event_type": str(row["event_type"]),
         "product_id": int(row["product_id"]),
         "category_id": int(row["category_id"]),
@@ -20,7 +30,7 @@ def format_record(row):
         if pd.notnull(row["category_code"])
         else None,
         "brand": str(row["brand"]) if pd.notnull(row["brand"]) else None,
-        "price": max(float(row["price"]), 0),  # Ensure non-negative prices
+        "price": max(float(row["price"]), 0),
         "user_id": int(row["user_id"]),
         "user_session": str(row["user_session"]),
     }

@@ -19,10 +19,10 @@ def main():
     drop_table_query = "DROP TABLE IF EXISTS events;"
     pc.execute_query(drop_table_query)
 
-    # Create events table with NUMERIC for IDs and longer VARCHAR fields
+    # Create events table with timestamp format that matches your requirement
     create_table_query = """
         CREATE TABLE IF NOT EXISTS events (
-            event_time TIMESTAMP,
+            event_time TIMESTAMP WITH TIME ZONE DEFAULT timezone('UTC', now()),
             event_type VARCHAR(50),
             product_id BIGINT,
             category_id BIGINT,
