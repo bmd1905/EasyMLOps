@@ -192,3 +192,7 @@ up-data-pipeline:
 	make up-dwh
 	make cdc_setup
 	make deploy_s3_connector
+
+up-training-pipeline:
+	make up-ray-cluster
+	make up-mlflow
