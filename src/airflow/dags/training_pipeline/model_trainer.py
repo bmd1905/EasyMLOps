@@ -1,6 +1,5 @@
-from ray_provider.decorators import ray
-
 from include.config.tune_config import RAY_TASK_CONFIG
+from ray_provider.decorators import ray
 
 
 @ray.task(config=RAY_TASK_CONFIG)
@@ -12,11 +11,6 @@ def train_final_model(data: dict, best_params: dict) -> dict:
 
     import pandas as pd
     import pyarrow.fs
-    from loguru import logger
-
-    import mlflow
-    import ray
-    from airflow.exceptions import AirflowException
     from include.config.tune_config import (
         MINIO_CONFIG,
         MODEL_NAME,
@@ -25,6 +19,11 @@ def train_final_model(data: dict, best_params: dict) -> dict:
         TUNE_SEARCH_SPACE,
         XGBOOST_PARAMS,
     )
+    from loguru import logger
+
+    import mlflow
+    import ray
+    from airflow.exceptions import AirflowException
     from mlflow.tracking.client import MlflowClient
     from ray.air.integrations.mlflow import MLflowLoggerCallback
     from ray.train import CheckpointConfig, RunConfig, ScalingConfig
@@ -193,9 +192,28 @@ def train_final_model(data: dict, best_params: dict) -> dict:
         except Exception as e:
             logger.error(f"Error during model registration: {e}")
             raise
-        finally:
-            # End the MLflow run
+
+        # Save category mappings as JSON artifact
+        if "category_mappings" in data:
+            logger.info("Saving category mappings to MLflow")
+            logger.debug(f"Category mappings content: {data['category_mappings']}")
+
+            try:
+                # Save mappings in the current active run before it ends
+                mappings_path = "category_mappings.json"
+                mlflow.log_dict(data["category_mappings"], mappings_path)
+                logger.info(
+                    f"Category mappings saved successfully to run_id: {mlflow_run_id}"
+                )
+            except Exception as e:
+                logger.error(f"Error saving category mappings: {e}")
+                raise
+
+        # Move the mlflow.end_run() after saving the mappings
+        try:
             mlflow.end_run()
+        except Exception:  # noqa: E722
+            pass
 
         # Transform metrics to match expected format
         metrics = {
@@ -212,6 +230,9 @@ def train_final_model(data: dict, best_params: dict) -> dict:
             "checkpoint_path": result.checkpoint.path,
             "best_params": best_params or {"best_config": model_params},
             "mlflow_model_uri": f"models:/{MODEL_NAME}/Staging",
+            "category_mappings_path": mappings_path
+            if "category_mappings" in data
+            else None,
         }
 
     except Exception as e:
