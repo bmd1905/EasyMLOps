@@ -47,7 +47,7 @@ up-cdc:
 	docker compose -f $(CDC_COMPOSE_FILE) up -d --build
 
 up-serving:
-	docker compose -f $(SERVING_COMPOSE_FILE) up --build
+	docker compose -f $(SERVING_COMPOSE_FILE) up -d --build
 
 down-network:
 	docker network rm easydatapipeline_default
@@ -213,3 +213,8 @@ up-data-pipeline:
 up-training-pipeline:
 	make up-ray-cluster
 	make up-mlflow
+
+up-serving-pipeline:
+	make up-ray-cluster
+	make up-online-store
+	make up-serving
