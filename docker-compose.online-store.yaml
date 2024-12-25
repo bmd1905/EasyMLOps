@@ -14,20 +14,24 @@ services:
     networks:
       - easydatapipeline_default
 
-  # feature-retrieval:
-  #   image: feature-retrieval
-  #   build:
-  #     dockerfile: Dockerfile
-  #     context: src/feature_stores
-  #   command: ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8001"]
-  #   ports:
-  #     - "8001:8001"
-  #   depends_on:
-  #     - redis
-  #   volumes:
-  #     - ./src/feature_stores:/app
-  #   networks:
-  #     - easydatapipeline_default
+  feature-retrieval:
+    build:
+      dockerfile: Dockerfile
+      context: src/feature_stores
+    container_name: feature-retrieval
+    command:
+      [
+        "sh",
+        "-c",
+        "python setup.py && python materialize_features.py && python api.py",
+      ]
+    ports:
+      - "8001:8001"
+    depends_on:
+      - redis
+
+    networks:
+      - easydatapipeline_default
 
 networks:
   easydatapipeline_default:

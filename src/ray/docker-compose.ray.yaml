@@ -29,8 +29,6 @@ services:
         limits:
           cpus: "0.5"
           memory: "2g"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     networks:
       - easydatapipeline_default
 

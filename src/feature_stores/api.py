@@ -36,3 +36,9 @@ async def get_features(request: FeatureRequest):
     ).to_dict()
 
     return result
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    uvicorn.run(app, host="0.0.0.0", port=8001)
