@@ -2,62 +2,57 @@
 
 ![Easy Data Pipeline Architecture](./docs/pipeline.png)
 
+## Current Flows
 
-## Currect Flows
+### Data Pipeline
 
-- The `Producer` acts as the source of raw events and produces data to the Kafka `Raw Events Topic`.
+- Multiple `Producers` act as sources of raw events and produce data to the Kafka `Raw Events Topic`.
 
-- The `Validation Flink job` consumes data from the `Raw Events Topic`, validates it, and publishes it to either the `Validated Topic` or the `Invalidated Topic` based on the outcome.
+- A `Validation Service` consumes data from the `Raw Events Topic`, validates it, and publishes to either:
 
-- The `Invalidated Topic` triggers an alerting system to notify stakeholders of invalid data.
+  - The `Validated Topic` for valid data
+  - The `Invalidated Topic` for invalid data
 
-- The `Validated Topic` is auto-synchronized with the `DataLake` for further processing.
+- The `Invalidated Topic` triggers an alerting system to send email notifications via Gmail to stakeholders about invalid data.
 
-- The `DataLake` stores validated data and serves as the central repository for downstream processing and analytics.
+- The `Validated Topic` is synchronized with:
 
-- `Airflow DAGs` orchestrate the following data processing steps:
-    - Ingest raw data from the DataLake.
-    - Validate and transform the data.
-    - Create feature views, dimension tables, and fact tables in the PostgreSQL Data Warehouse.
+  - The `DataLake` for persistent storage and further processing
+  - The `Online Store` (Redis) for real-time feature serving
 
-- The `Ray Train` framework processes data for machine learning tasks, consisting of:
-    - Load_data Task: Pulls data from the DataLake to prepare it for training.
-    - Train_model Task: Trains a distributed model and stores checkpoints in MinIO for recovery or further analysis.
+- The Data Warehouse (Offline Store) processing workflow is orchestrated by `Airflow DAGs`:
+  - Ingest raw data from the DataLake
+  - Validate raw data
+  - Transform data
+  - Create feature views
+  - Create dimension and fact tables
 
-- The `Ray Cluster` scales model training across multiple workers to handle large datasets and computational loads.
+### Training Pipeline
 
-- The `PostgreSQL Data Warehouse` serves as the final destination for transformed and processed data, supporting analytics and reporting.
+- The `Ray Train` framework handles distributed model training:
 
+  - Load_data Task: Pulls features from the Data Warehouse
+  - Train_model Task: Trains the model using distributed computing
+
+- The `MLflow` Model Registry:
+  - Stores model checkpoints and metrics
+  - Integrates with Jupyter notebooks in the Dev Environment
+  - Pushes metrics and weights for model analysis
+
+### Serving Pipeline
+
+- `RayServe` with `XGBoost` handles model serving:
+  - Loads model checkpoints from MLflow
+  - Pulls real-time features from the Online Store
+  - Serves predictions to the Product App
+
+### Observability
+
+- OpenTelemetry Collector gathers telemetry data from the serving pipeline
+- SigNoz serves as the Central Dashboard for monitoring:
+  - Collects metrics exported from OpenTelemetry
+  - Provides visibility into system performance and health
 
 ## Usage
 
 Check the `Makefile` for all the commands you can use.
-
-```bash
-# Start the Kafka cluster
-make up-kafka
-
-# Start the MinIO cluster
-make up-minio
-
-# Start the Data Warehouse cluster
-make up-dwh
-
-# Start the Airflow cluster
-make up-airflow
-
-# Start the Ray cluster
-make up-ray-cluster
-```
-
-Deploy the S3 connector to the Kafka cluster.
-
-```bash
-make deploy-s3-connector
-```
-
-Start the consumer to validate the data.
-
-```bash
-make consumer
-```
