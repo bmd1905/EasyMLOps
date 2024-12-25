@@ -13,15 +13,15 @@ provider: local
 # we pick Redis https://docs.feast.dev/reference/online-stores/redis#examples
 online_store:
   type: redis
-  connection_string: "localhost:6379"
+  connection_string: "online-store-redis:6379"
 # For offline store, we go with PostgreSQL
 # https://docs.feast.dev/reference/offline-stores/postgres
 offline_store:
   type: postgres
-  host: ${DWH_HOST}
-  port: 5433
+  host: postgres-dwh
+  port: 5432
   database: dwh
   db_schema: dwh
-  user: ${DWH_USER}
-  password: ${DWH_PASSWORD}
+  user: dwh
+  password: dwh
 entity_key_serialization_version: 2

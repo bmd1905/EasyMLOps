@@ -15,7 +15,7 @@ dill==0.3.8
 exceptiongroup==1.2.2
 fastapi==0.112.2
 fastavro==1.9.5
-feast==0.40.1
+feast==0.42.0
 fissix==24.4.24
 fsspec==2024.6.1
 greenlet==3.0.3

@@ -7,7 +7,7 @@ services:
     ports:
       - "8265:8265"
       - "10001:10001"
-      - "8002:8000"
+      - "8000:8000"
     volumes:
       - /tmp/ray:/tmp/ray
     command: >
@@ -29,6 +29,8 @@ services:
         limits:
           cpus: "0.5"
           memory: "2g"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks:
       - easydatapipeline_default
 

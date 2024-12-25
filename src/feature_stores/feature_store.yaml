@@ -18,10 +18,10 @@ online_store:
 # https://docs.feast.dev/reference/offline-stores/postgres
 offline_store:
   type: postgres
-  host: ${DWH_HOST}
+  host: localhost
   port: 5433
   database: dwh
   db_schema: dwh
-  user: ${DWH_USER}
-  password: ${DWH_PASSWORD}
+  user: dwh
+  password: dwh
 entity_key_serialization_version: 2

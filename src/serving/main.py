@@ -34,9 +34,9 @@ class APIIngress:
         feature_service: OnlineFeatureService,
         prediction_service: PredictionService,
     ):
-        self.feature_service = feature_service
-        self.prediction_service = prediction_service
-        self.FEATURE_COLUMNS = [
+        self._feature_service = feature_service
+        self._prediction_service = prediction_service
+        self._FEATURE_COLUMNS = [
             "user_session",
             "activity_count",
             "unique_products_viewed",
@@ -52,7 +52,7 @@ class APIIngress:
         # Get features from online store for each request
         for request in requests:
             # Get online features
-            feature_result = feature_service.get_online_features(
+            feature_result = await self._feature_service.remote(
                 user_id=request.user_id, product_id=request.product_id
             )
 
@@ -72,12 +72,12 @@ class APIIngress:
 
         # Filter features to only include the ones we need
         features = [
-            {key: feature[key] for key in self.FEATURE_COLUMNS if key in feature}
+            {key: feature[key] for key in self._FEATURE_COLUMNS if key in feature}
             for feature in features
         ]
 
         # Get predictions using the combined features
-        result = prediction_service.predict(features)
+        result = await self._prediction_service.remote(features)
 
         if not result["success"]:
             raise HTTPException(status_code=500, detail=result["error"])
@@ -88,8 +88,10 @@ class APIIngress:
         }
 
 
-feature_service = OnlineFeatureService.bind(repo_path=".")
+feature_service = OnlineFeatureService.bind()
 prediction_service = PredictionService.bind(
     model_name="purchase_prediction_model", mlflow_uri="http://mlflow_server:5000"
 )
 entrypoint = APIIngress.bind(feature_service, prediction_service)
+
+serve.start(http_options={"host": "0.0.0.0", "port": 8000})

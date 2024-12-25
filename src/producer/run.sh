@@ -30,12 +30,12 @@ case $cmd in
             echo "Registering a new connector from $2"
             # First, process the config file to replace environment variables
             processed_config=$(cat "$2" | envsubst)
-            
+
             # Then send the processed config to Kafka Connect
             echo "Processed config:"
             echo "$processed_config"
             echo "$processed_config" | curl -X POST -H 'Content-Type: application/json' --data-binary @- http://localhost:8083/connectors
-            
+
             # Check the response
             if [ $? -eq 0 ]; then
                 echo "Connector registered successfully"
