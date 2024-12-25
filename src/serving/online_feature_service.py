@@ -8,9 +8,10 @@ from ray import serve
 
 @serve.deployment(num_replicas=1)
 class OnlineFeatureService:
-    BASE_FEATURE_RETRIEVAL_URL = "http://localhost:8001"
+    def __init__(self, feature_retrieval_url: str):
+        self.feature_retrieval_url = feature_retrieval_url
 
-    async def __call__(self, user_id: int, product_id: int) -> Dict[str, Any]:
+    def __call__(self, user_id: int, product_id: int) -> Dict[str, Any]:
         """Get online features for prediction"""
         try:
             logger.info(
@@ -19,7 +20,7 @@ class OnlineFeatureService:
 
             # make a request to the feature store
             response = requests.post(
-                f"{self.BASE_FEATURE_RETRIEVAL_URL}/features",
+                f"{self.feature_retrieval_url}/features",
                 json={"user_id": user_id, "product_id": product_id},
             )
             feature_vector = response.json()

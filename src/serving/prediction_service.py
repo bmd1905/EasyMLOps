@@ -93,7 +93,7 @@ class PredictionService:
             logger.error(f"Error loading model or mappings: {e}")
             return None, None
 
-    async def __call__(self, features: List[Dict]) -> Dict:
+    def __call__(self, features: List[Dict]) -> Dict:
         """Make predictions using the loaded model"""
         try:
             logger.info(f"Received prediction request for {len(features)} features")
@@ -109,13 +109,13 @@ class PredictionService:
                     logger.debug(f"Encoded column {col}")
 
             logger.info("Running model prediction")
-            predictions = await self.model.predict(df)
+            predictions = self.model.predict(df)
             logger.info(f"Generated {len(predictions)} predictions")
 
             return {
                 "success": True,
                 "predictions": predictions.tolist(),
-                "encoded_features": df.to_dict(orient="records"),
+                # "encoded_features": df.to_dict(orient="records"),
             }
 
         except Exception as e:

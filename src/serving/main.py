@@ -1,7 +1,9 @@
+import json
 import os
 from typing import List
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import Response
 from online_feature_service import OnlineFeatureService
 from prediction_service import PredictionService
 from pydantic import BaseModel
@@ -18,6 +20,7 @@ ray.init(
     address="auto",
     namespace="serving",
     runtime_env={"working_dir": working_dir},
+    log_to_driver=True,
 )
 
 
@@ -79,16 +82,18 @@ class APIIngress:
         # Get predictions using the combined features
         result = await self._prediction_service.remote(features)
 
-        if not result["success"]:
-            raise HTTPException(status_code=500, detail=result["error"])
+        # Load to json
+        result_json = json.dumps(result)
 
-        return {
-            "predictions": result["predictions"],
-            "encoded_features": result["encoded_features"],
-        }
+        return Response(
+            content=result_json,
+            media_type="application/json",
+        )
 
 
-feature_service = OnlineFeatureService.bind()
+feature_service = OnlineFeatureService.bind(
+    feature_retrieval_url="http://feature-retrieval:8001"
+)
 prediction_service = PredictionService.bind(
     model_name="purchase_prediction_model", mlflow_uri="http://mlflow_server:5000"
 )
