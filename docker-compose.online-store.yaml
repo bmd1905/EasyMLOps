@@ -14,6 +14,25 @@ services:
     networks:
       - easydatapipeline_default
 
+  feature-retrieval:
+    build:
+      dockerfile: Dockerfile
+      context: src/feature_stores
+    container_name: feature-retrieval
+    command:
+      [
+        "sh",
+        "-c",
+        "python setup.py && python materialize_features.py && python api.py",
+      ]
+    ports:
+      - "8001:8001"
+    depends_on:
+      - redis
+
+    networks:
+      - easydatapipeline_default
+
 networks:
   easydatapipeline_default:
     external: true
