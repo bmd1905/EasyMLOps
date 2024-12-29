@@ -10,15 +10,56 @@
             }
         },
         {
-            "expectation_type": "expect_column_values_to_be_unique",
+            "expectation_type": "expect_table_columns_to_match_ordered_list",
             "kwargs": {
-                "column": "fact_id"
+                "column_list": [
+                    "event_id",
+                    "event_type",
+                    "user_id",
+                    "product_id",
+                    "category_id",
+                    "event_date",
+                    "event_timestamp",
+                    "user_session",
+                    "events_in_session"
+                ]
             }
         },
         {
             "expectation_type": "expect_column_values_to_not_be_null",
             "kwargs": {
-                "column": "dimension_id"
+                "column": "event_id"
+            }
+        },
+        {
+            "expectation_type": "expect_column_values_to_not_be_null",
+            "kwargs": {
+                "column": "event_type"
+            }
+        },
+        {
+            "expectation_type": "expect_column_values_to_be_in_set",
+            "kwargs": {
+                "column": "event_type",
+                "value_set": [
+                    "purchase",
+                    "view",
+                    "cart",
+                    "add_to_cart",
+                    "remove_from_cart"
+                ]
+            }
+        },
+        {
+            "expectation_type": "expect_column_values_to_not_be_null",
+            "kwargs": {
+                "column": "user_id"
+            }
+        },
+        {
+            "expectation_type": "expect_column_values_to_not_be_null",
+            "kwargs": {
+                "column": "product_id"
             }
         }
     ],
