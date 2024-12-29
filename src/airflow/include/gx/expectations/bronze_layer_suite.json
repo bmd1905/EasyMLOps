@@ -1,0 +1,34 @@
+{
+    "data_asset_type": null,
+    "expectation_suite_name": "bronze_layer_suite",
+    "expectations": [
+        {
+            "expectation_type": "expect_table_row_count_to_be_between",
+            "kwargs": {
+                "min_value": 1,
+                "max_value": 1000000
+            }
+        },
+        {
+            "expectation_type": "expect_table_columns_to_match_ordered_list",
+            "kwargs": {
+                "column_list": [
+                    "event_id",
+                    "event_timestamp",
+                    "event_type",
+                    "user_id",
+                    "product_id"
+                ]
+            }
+        },
+        {
+            "expectation_type": "expect_column_values_to_not_be_null",
+            "kwargs": {
+                "column": "event_id"
+            }
+        }
+    ],
+    "meta": {
+        "great_expectations_version": "0.15.34"
+    }
+}
