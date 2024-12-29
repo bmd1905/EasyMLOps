@@ -11,12 +11,20 @@ from data_pipeline.gold.load_to_dwh import load_dimensions_and_facts
 from data_pipeline.silver.transform_data import transform_data
 from include.config.data_pipeline_config import DataPipelineConfig
 from loguru import logger
+from great_expectations_provider.operators.great_expectations import (
+    GreatExpectationsOperator,
+)
 
 from airflow.decorators import dag, task
 from airflow.exceptions import AirflowException
 from airflow.utils.task_group import TaskGroup
 
 logger = logger.bind(name=__name__)
+
+# Constants for Great Expectations
+POSTGRES_CONN_ID = "postgres_dwh"
+POSTGRES_SCHEMA = "dwh"
+GX_DATA_CONTEXT = "include/gx"
 
 # Define default arguments
 default_args = {
@@ -56,6 +64,7 @@ def bronze_layer(config: DataPipelineConfig) -> Dict[str, Any]:
         return ingest_raw_data(config, valid)
 
     @task(
+        task_id="quality_check_raw_data",
         retries=2,
         retry_delay=timedelta(minutes=2),
         execution_timeout=timedelta(minutes=15),
@@ -101,19 +110,55 @@ def silver_layer(validated_data: Dict[str, Any]) -> Dict[str, Any]:
     return transformed_data
 
 
-def gold_layer(transformed_data: Dict[str, Any]) -> bool:
-    """Task group for the gold layer of the data pipeline."""
-    if transformed_data is None:
-        logger.error("Transformed data is None.")
-        return False
+def gold_layer(transformed_data: Dict[str, Any]) -> TaskGroup:
+    """Create task group for the gold layer of the data pipeline."""
+    with TaskGroup("gold_layer_tasks") as gold_group:
+        # Task to load data to DWH
+        @task(task_id="load_to_dwh")
+        def load_to_dwh(data: Dict[str, Any]) -> bool:
+            """Load data to DWH"""
+            success = load_dimensions_and_facts(data)
+            if not success:
+                logger.error("Failed to load dimensional model.")
+                raise AirflowException("Failed to load dimensional model")
+            return True
 
-    # Load dimensions and facts
-    success = load_dimensions_and_facts(transformed_data)
-    if not success:
-        logger.error("Failed to load dimensional model.")
-        return False
+        # Task to validate data using Great Expectations
+        @task(task_id="validate_dwh_data")
+        def validate_dwh_data(**context) -> bool:
+            """Validate data in DWH using Great Expectations"""
+            try:
+                gx_validate_dwh = GreatExpectationsOperator(
+                    task_id="gx_validate",
+                    conn_id=POSTGRES_CONN_ID,
+                    data_context_root_dir=GX_DATA_CONTEXT,
+                    schema=POSTGRES_SCHEMA,
+                    data_asset_name="fact_events",
+                    checkpoint_name="fact_events.gold_layer_suite.chk",
+                    runtime_environment={"airflow_run_id": context["run_id"]},
+                    return_json_dict=True,
+                )
 
-    return True
+                validation_result = gx_validate_dwh.execute(context=context)
+                if not validation_result["success"]:
+                    logger.error(
+                        f"Data quality validation failed in DWH. Details: {validation_result.get('statistics', {})}"
+                    )
+                    raise AirflowException("Data quality validation failed")
+                logger.info("Data quality validation passed successfully")
+                return True
+            except Exception as e:
+                logger.error(f"Error during data quality validation: {str(e)}")
+                raise AirflowException(f"Data quality validation error: {str(e)}")
+
+        # Define task sequence
+        load_task = load_to_dwh(transformed_data)
+        validate_task = validate_dwh_data()
+
+        # Set dependencies
+        load_task >> validate_task
+
+    return gold_group
 
 
 # @task
@@ -146,11 +191,12 @@ def data_pipeline():
     This DAG processes data through three layers:
     * Bronze: Raw data ingestion and validation
     * Silver: Data transformation and enrichment
-    * Gold: Loading to dimensional model
+    * Gold: Loading to dimensional model with data quality validation
 
     Dependencies:
     * MinIO connection
     * Postgres DWH connection
+    * Great Expectations context
     """
     # Load configuration
     config = DataPipelineConfig.from_airflow_variables()
@@ -163,8 +209,8 @@ def data_pipeline():
     with TaskGroup("silver_layer_group") as silver_group:
         transformed_data = silver_layer(validated_data)
 
-    with TaskGroup("gold_layer_group") as gold_group:
-        success = gold_layer(transformed_data)  # noqa: F841
+    # Gold layer tasks
+    gold_group = gold_layer(transformed_data)
 
     # Add monitoring task
     @task(trigger_rule="all_done")

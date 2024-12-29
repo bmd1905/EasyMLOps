@@ -1,0 +1,33 @@
+name: fact_events.gold_layer_suite.chk
+config_version: 1.0
+template_name:
+module_name: great_expectations.checkpoint
+class_name: Checkpoint
+
+run_name_template: "%Y%m%d-%H%M%S-my-run-name-template"
+
+expectation_suite_name: gold_layer_suite
+
+batch_request:
+  datasource_name: postgres_dwh_configured_sql_datasource
+  data_connector_name: default_configured_asset_sql_data_connector
+  data_asset_name: fact_events
+  data_connector_query:
+    batch_filter_parameters:
+      airflow_run_id: "$airflow_run_id"
+
+action_list:
+  - name: store_validation_result
+    action:
+      class_name: StoreValidationResultAction
+  - name: store_evaluation_params
+    action:
+      class_name: StoreEvaluationParametersAction
+  - name: update_data_docs
+    action:
+      class_name: UpdateDataDocsAction
+
+evaluation_parameters: {}
+runtime_configuration: {}
+validations: []
+profilers: []

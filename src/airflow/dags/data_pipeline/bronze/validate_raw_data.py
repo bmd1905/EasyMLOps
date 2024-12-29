@@ -4,6 +4,9 @@ from typing import Any, Dict, Optional, Tuple
 
 import pandas as pd
 import pendulum
+from great_expectations_provider.operators.great_expectations import (
+    GreatExpectationsOperator,
+)
 from include.common.scripts.monitoring import PipelineMonitoring
 from loguru import logger
 
@@ -12,18 +15,40 @@ from airflow.decorators import task
 logger = logger.bind(name=__name__)
 
 
+def extract_payload(record: Dict[str, Any]) -> Dict[str, Any]:
+    """Extract payload from nested record structure"""
+    try:
+        if isinstance(record.get("payload"), dict):
+            return record["payload"]
+        return record
+    except Exception:
+        return record
+
+
 def validate_record(record: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
     """Validate a single record against business rules"""
     try:
-        if not isinstance(record.get("price"), (int, float)):
-            logger.error("Invalid price type for record: {}", record)
-            return False, "Invalid price type"
-        if record.get("price", 0) < 0:
-            logger.error("Negative price for record: {}", record)
-            return False, "Negative price"
-        if not record.get("product_id"):
-            logger.error("Missing product_id for record: {}", record)
+        # Extract payload if nested
+        data = extract_payload(record)
+
+        # Check if event_time exists (timestamp field)
+        if not data.get("event_time"):
+            logger.error("Missing event_time for record: {}", data)
+            return False, "Missing event_time"
+
+        # Check required fields
+        if not data.get("event_type"):
+            logger.error("Missing event_type for record: {}", data)
+            return False, "Missing event_type"
+
+        if not data.get("product_id"):
+            logger.error("Missing product_id for record: {}", data)
             return False, "Missing product_id"
+
+        if not data.get("user_id"):
+            logger.error("Missing user_id for record: {}", data)
+            return False, "Missing user_id"
+
         return True, None
     except Exception as e:
         logger.exception("Error validating record: {}", record)
@@ -32,68 +57,130 @@ def validate_record(record: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
 
 def generate_record_hash(record: Dict[str, Any]) -> str:
     """Generate a unique hash for a record based on business keys"""
-    key_fields = ["product_id", "timestamp", "user_id"]
-    key_string = "|".join(str(record.get(field, "")) for field in key_fields)
-    return sha256(key_string.encode()).hexdigest()
+    try:
+        data = extract_payload(record)
+        key_fields = ["product_id", "event_time", "user_id"]
+        key_string = "|".join(str(data.get(field, "")) for field in key_fields)
+        return sha256(key_string.encode()).hexdigest()
+    except Exception as e:
+        logger.error(f"Error generating hash for record: {str(e)}")
+        return sha256(str(record).encode()).hexdigest()
 
 
 def enrich_record(record: Dict[str, Any], record_hash: str) -> Dict[str, Any]:
     """Add metadata to a record"""
-    record["processed_date"] = datetime.now(tz=pendulum.timezone("UTC")).isoformat()
-    record["processing_pipeline"] = "minio_etl"
-    record["valid"] = "TRUE"
-    record["record_hash"] = record_hash
-    return record
+    try:
+        # Keep original record structure
+        enriched = record.copy()
+        enriched["processed_date"] = datetime.now(
+            tz=pendulum.timezone("UTC")
+        ).isoformat()
+        enriched["processing_pipeline"] = "minio_etl"
+        enriched["valid"] = "TRUE"
+        enriched["record_hash"] = record_hash
+
+        # If payload exists, also add metadata there
+        if isinstance(enriched.get("payload"), dict):
+            enriched["payload"]["processed_date"] = enriched["processed_date"]
+            enriched["payload"]["processing_pipeline"] = enriched["processing_pipeline"]
+            enriched["payload"]["valid"] = enriched["valid"]
+            enriched["payload"]["record_hash"] = enriched["record_hash"]
+
+        return enriched
+    except Exception as e:
+        logger.error(f"Error enriching record: {str(e)}")
+        return record
+
+
+def flatten_record(record: Dict[str, Any]) -> Dict[str, Any]:
+    """Flatten nested record structure"""
+    try:
+        flattened = {}
+        # Copy top-level metadata
+        for key in ["record_hash", "processed_date", "processing_pipeline", "valid"]:
+            if key in record:
+                flattened[key] = record[key]
+
+        # Extract payload data
+        payload = record.get("payload", {})
+        if isinstance(payload, dict):
+            for key, value in payload.items():
+                flattened[key] = value
+
+        return flattened
+    except Exception as e:
+        logger.error(f"Error flattening record: {str(e)}")
+        return record
 
 
 @task()
 def validate_raw_data(raw_data: Dict[str, Any]) -> Dict[str, Any]:
-    """Validate the raw data"""
-    metrics = {
-        "total_records": 0,
-        "valid_records": 0,
-        "invalid_records": 0,
-        "duplicate_records": 0,
-        "validation_errors": {},
-    }
-
+    """Validate raw data using both Great Expectations and custom validation"""
     try:
-        flattened_data = []
-        seen_records = set()
+        # Convert input data to DataFrame
+        df = pd.DataFrame(raw_data["data"])
+        logger.info(f"Initial columns: {df.columns.tolist()}")
 
-        for record in raw_data["data"]:
-            metrics["total_records"] += 1
-            payload = record.get("payload", {})
+        # Add record hash
+        df["record_hash"] = df.apply(
+            lambda x: generate_record_hash(x.to_dict()), axis=1
+        )
 
-            record_hash = generate_record_hash(payload)
+        # Custom validation
+        records = df.to_dict("records")
+        validation_results = [validate_record(record) for record in records]
+        valid_records = [
+            record
+            for record, (is_valid, _) in zip(records, validation_results)
+            if is_valid
+        ]
+        validation_errors = {
+            i: error
+            for i, (is_valid, error) in enumerate(validation_results)
+            if not is_valid
+        }
 
-            if record_hash in seen_records:
-                metrics["duplicate_records"] += 1
-                logger.warning("Duplicate record found: {}", record)
-                continue
+        if not valid_records:
+            logger.error("No valid records after custom validation")
+            logger.error(f"Validation errors: {validation_errors}")
+            raise Exception("No valid records after custom validation")
 
-            is_valid, error_message = validate_record(payload)
+        # Convert valid records back to DataFrame
+        valid_df = pd.DataFrame(valid_records)
 
-            if not is_valid:
-                metrics["invalid_records"] += 1
-                metrics["validation_errors"][error_message] = (
-                    metrics["validation_errors"].get(error_message, 0) + 1
-                )
-                logger.warning("Invalid record: {}. Error: {}", record, error_message)
-                continue
+        # Validate using Great Expectations
+        gx_validate = GreatExpectationsOperator(
+            task_id="validate_raw_data_gx",
+            data_context_root_dir="include/gx",
+            dataframe_to_validate=valid_df,
+            data_asset_name="raw_data_asset",
+            execution_engine="PandasExecutionEngine",
+            expectation_suite_name="raw_data_suite",
+            return_json_dict=True,
+        )
 
-            metrics["valid_records"] += 1
-            seen_records.add(record_hash)
+        validation_result = gx_validate.execute(context={})  # noqa: F841
 
-            enriched_payload = enrich_record(payload, record_hash)
-            flattened_data.append(enriched_payload)
+        # Calculate metrics
+        metrics = {
+            "total_records": len(df),
+            "valid_records": len(valid_records),
+            "invalid_records": len(df) - len(valid_records),
+            "validation_errors": validation_errors,
+        }
 
         # Log metrics
         PipelineMonitoring.log_metrics(metrics)
 
-        df = pd.DataFrame(flattened_data)
-        return {"data": df.to_dict(orient="records"), "metrics": metrics}
+        # Enrich and flatten valid records
+        enriched_data = []
+        for record in valid_records:
+            enriched = enrich_record(record, record["record_hash"])
+            flattened = flatten_record(enriched)
+            enriched_data.append(flattened)
+
+        return {"data": enriched_data, "metrics": metrics}
 
     except Exception as e:
-        logger.exception("Failed to transform data")
-        raise Exception(f"Failed to transform data: {str(e)}")
+        logger.exception("Failed to validate data")
+        raise Exception(f"Failed to validate data: {str(e)}")
