@@ -1,5 +1,18 @@
 config_version: 3.0
 datasources:
+  pandas_datasource:
+    class_name: Datasource
+    module_name: great_expectations.datasource
+    execution_engine:
+      class_name: PandasExecutionEngine
+      module_name: great_expectations.execution_engine
+    data_connectors:
+      default_runtime_data_connector:
+        name: default_runtime_data_connector
+        class_name: RuntimeDataConnector
+        module_name: great_expectations.datasource.data_connector
+        batch_identifiers:
+          - airflow_run_id
   postgres_gx_configured_sql_datasource:
     class_name: Datasource
     module_name: great_expectations.datasource
@@ -39,6 +52,19 @@ datasources:
             schema_name: dwh
             batch_identifiers:
               - airflow_run_id
+  raw_data_asset_runtime_datasource:
+    class_name: Datasource
+    module_name: great_expectations.datasource
+    execution_engine:
+      class_name: PandasExecutionEngine
+      module_name: great_expectations.execution_engine
+    data_connectors:
+      default_runtime_connector:
+        name: default_runtime_connector
+        class_name: RuntimeDataConnector
+        module_name: great_expectations.datasource.data_connector
+        batch_identifiers:
+          - airflow_run_id
 config_variables_file_path: uncommitted/config_variables.yml
 plugins_directory: plugins/
 stores:
