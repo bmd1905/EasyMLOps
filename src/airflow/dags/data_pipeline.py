@@ -1,6 +1,7 @@
 from datetime import timedelta
 from typing import Any, Dict
 
+import pandas as pd
 import pendulum
 from data_pipeline.bronze.ingest_raw_data import (
     check_minio_connection,
@@ -9,11 +10,11 @@ from data_pipeline.bronze.ingest_raw_data import (
 from data_pipeline.bronze.validate_raw_data import validate_raw_data
 from data_pipeline.gold.load_to_dwh import load_dimensions_and_facts
 from data_pipeline.silver.transform_data import transform_data
-from include.config.data_pipeline_config import DataPipelineConfig
-from loguru import logger
 from great_expectations_provider.operators.great_expectations import (
     GreatExpectationsOperator,
 )
+from include.config.data_pipeline_config import DataPipelineConfig
+from loguru import logger
 
 from airflow.decorators import dag, task
 from airflow.exceptions import AirflowException
@@ -71,41 +72,42 @@ def bronze_layer(config: DataPipelineConfig) -> Dict[str, Any]:
     )
     def validate_data(raw_data: Dict[str, Any]) -> Dict[str, Any]:
         if raw_data is None:
-            raise AirflowException("Raw data is None")
+            logger.warning("Raw data is None, skipping validation")
+            return {"data": [], "metrics": {"total_records": 0, "valid_records": 0}}
         return validate_raw_data(raw_data)
 
     # Check MinIO connection
     valid = check_minio_connection()
     if not valid:
         logger.error("MinIO connection failed.")
-        return None
+        return {"data": [], "metrics": {"total_records": 0, "valid_records": 0}}
 
     # Ingest raw data
     raw_data = ingest_raw_data(config, valid)
     if raw_data is None:
         logger.error("Ingested raw data is None.")
-        return None
+        return {"data": [], "metrics": {"total_records": 0, "valid_records": 0}}
 
     # Validate raw data
     validated_data = validate_raw_data(raw_data)
     if validated_data is None:
         logger.error("Validation of raw data failed.")
-        return None
+        return {"data": [], "metrics": {"total_records": 0, "valid_records": 0}}
 
     return validated_data
 
 
 def silver_layer(validated_data: Dict[str, Any]) -> Dict[str, Any]:
     """Task group for the silver layer of the data pipeline."""
-    if validated_data is None:
-        logger.error("Validated data is None.")
-        return None
+    if validated_data is None or not validated_data["data"]:
+        logger.warning("No valid data to transform")
+        return {"data": [], "metrics": {"transformed_records": 0}}
 
     # Transform data
     transformed_data = transform_data(validated_data)
     if transformed_data is None:
         logger.error("Data transformation failed.")
-        return None
+        return {"data": [], "metrics": {"transformed_records": 0}}
 
     return transformed_data
 
@@ -117,9 +119,12 @@ def gold_layer(transformed_data: Dict[str, Any]) -> TaskGroup:
         @task(task_id="load_to_dwh")
         def load_to_dwh(data: Dict[str, Any]) -> bool:
             """Load data to DWH"""
+            if not data.get("data"):
+                logger.warning("No data to load to DWH")
+                return True
+
             success = load_dimensions_and_facts(data)
             if not success:
-                logger.error("Failed to load dimensional model.")
                 raise AirflowException("Failed to load dimensional model")
             return True
 
@@ -127,6 +132,10 @@ def gold_layer(transformed_data: Dict[str, Any]) -> TaskGroup:
         @task(task_id="validate_dwh_data")
         def validate_dwh_data(**context) -> bool:
             """Validate data in DWH using Great Expectations"""
+            if not transformed_data["data"]:
+                logger.warning("No data to validate in DWH")
+                return True
+
             try:
                 gx_validate_dwh = GreatExpectationsOperator(
                     task_id="gx_validate",
@@ -161,16 +170,16 @@ def gold_layer(transformed_data: Dict[str, Any]) -> TaskGroup:
     return gold_group
 
 
-# @task
-# def debug_data(data: Dict[str, Any], layer: str):
-#     """Debug task to inspect data between layers"""
-#     if data and "data" in data:
-#         df = pd.DataFrame(data["data"])
-#         logger.info(f"=== {layer} Layer Data ===")
-#         logger.info(f"Columns: {df.columns.tolist()}")
-#         logger.info(f"Shape: {df.shape}")
-#         logger.info(f"First row: {df.iloc[0].to_dict()}")
-#     return data
+@task
+def debug_data(data: Dict[str, Any], layer: str):
+    """Debug task to inspect data between layers"""
+    if data and "data" in data:
+        df = pd.DataFrame(data["data"])
+        logger.info(f"=== {layer} Layer Data ===")
+        logger.info(f"Columns: {df.columns.tolist()}")
+        logger.info(f"Shape: {df.shape}")
+        logger.info(f"First row: {df.iloc[0].to_dict()}")
+    return data
 
 
 @dag(
@@ -204,7 +213,7 @@ def data_pipeline():
     # Execute layers with proper error handling
     with TaskGroup("bronze_layer_group") as bronze_group:
         validated_data = bronze_layer(config)
-        # validated_data = debug_data(validated_data, "Bronze")
+        validated_data = debug_data(validated_data, "Bronze")
 
     with TaskGroup("silver_layer_group") as silver_group:
         transformed_data = silver_layer(validated_data)

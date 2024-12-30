@@ -1,4 +1,5 @@
 import json
+import os
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import timedelta
@@ -145,7 +146,7 @@ def ingest_raw_data(config: DataPipelineConfig, valid: bool = True) -> Dict[str,
 
         log.info(f"Found {len(keys_to_process)} new files to process")
 
-        MAX_WORKERS = 8
+        MAX_WORKERS = os.cpu_count()
         all_data = []
         processed_files = 0
         error_files = 0
