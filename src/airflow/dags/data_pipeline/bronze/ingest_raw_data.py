@@ -131,9 +131,6 @@ def ingest_raw_data(config: DataPipelineConfig, valid: bool = True) -> Dict[str,
         checkpoint_key = get_checkpoint_key(config)
         all_keys.discard(checkpoint_key)  # Remove checkpoint file
 
-        # DEV: only keep 1000 keys
-        # all_keys = list(all_keys)[:1000]
-
         if not all_keys:
             raise Exception(f"No files found in path: {config.path_prefix}")
 
