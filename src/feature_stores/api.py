@@ -19,7 +19,6 @@ app.add_middleware(
 class FeatureRequest(BaseModel):
     user_id: int = 530834332
     product_id: int = 1005073
-    user_session: str = "040d0e0b-0a40-4d40-bdc9-c9252e877d9c"
 
 
 @app.post("/features")

@@ -2,8 +2,8 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 from feast import FeatureStore
+from features import product, product_features, streaming_features, user, user_features
 from loguru import logger
-from features import user_features, product_features, user, product
 
 
 def setup_feature_store():
@@ -19,7 +19,9 @@ def setup_feature_store():
         store = FeatureStore(repo_path=repo_path)
 
         # Apply feature definitions
-        store.apply([user, product, user_features, product_features])
+        store.apply(
+            [user, product, user_features, product_features, streaming_features]
+        )
 
         logger.info("Feature store setup completed successfully")
         return True
