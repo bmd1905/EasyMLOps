@@ -7,6 +7,7 @@ from pyflink.datastream import StreamExecutionEnvironment
 from .jobs.alert_invalid_events_job import AlertInvalidEventsJob
 from .jobs.base import FlinkJob
 from .jobs.schema_validation_job import SchemaValidationJob
+from .jobs.feature_calculation_job import FeatureCalculationJob
 
 load_dotenv(find_dotenv())
 
@@ -16,6 +17,7 @@ def get_available_jobs() -> Dict[str, Type[FlinkJob]]:
     return {
         "schema_validation": SchemaValidationJob,
         "alert_invalid_events": AlertInvalidEventsJob,
+        "feature_calculation": FeatureCalculationJob,
     }
 
 
