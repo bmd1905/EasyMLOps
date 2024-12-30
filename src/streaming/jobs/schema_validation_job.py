@@ -25,18 +25,31 @@ logger.add(
 
 class RequestCounter:
     def __init__(self):
-        self.count = 0
+        self.valid_count = 0
+        self.invalid_count = 0
         self.last_log_time = time.time()
         self.lock = Lock()
 
-    def increment(self):
+    def increment_valid(self):
         with self.lock:
-            self.count += 1
-            current_time = time.time()
-            if current_time - self.last_log_time >= 1.0:
-                logger.info(f"Processed {self.count} records in the last second")
-                self.count = 0
-                self.last_log_time = current_time
+            self.valid_count += 1
+            self._check_and_log()
+
+    def increment_invalid(self):
+        with self.lock:
+            self.invalid_count += 1
+            self._check_and_log()
+
+    def _check_and_log(self):
+        current_time = time.time()
+        if current_time - self.last_log_time >= 1.0:
+            total = self.valid_count + self.invalid_count
+            logger.info(
+                f"Processed {total} records in the last second (Valid: {self.valid_count}, Invalid: {self.invalid_count})"
+            )
+            self.valid_count = 0
+            self.invalid_count = 0
+            self.last_log_time = current_time
 
 
 request_counter = RequestCounter()
@@ -144,7 +157,6 @@ def validate_field_value(value: Any, field_def: Dict) -> Tuple[bool, str]:
 
 def validate_schema(record: str) -> str:
     """Validate a record against its schema."""
-    request_counter.increment()
     logger.debug(f"Validating record: {record}")
 
     try:
@@ -175,6 +187,7 @@ def validate_schema(record: str) -> str:
                 logger.debug(
                     f"Field {field_name} is required but not present. Record marked as invalid: {record_dict}"
                 )
+                request_counter.increment_invalid()
                 return json.dumps(record_dict)
 
             # Skip validation for missing optional fields
@@ -196,6 +209,7 @@ def validate_schema(record: str) -> str:
                 logger.debug(
                     f"Field {field_name} has invalid type. Record marked as invalid: {record_dict}"
                 )
+                request_counter.increment_invalid()
                 return json.dumps(record_dict)
 
             # Validate value constraints
@@ -211,6 +225,7 @@ def validate_schema(record: str) -> str:
                 logger.debug(
                     f"Field {field_name} has invalid value. Record marked as invalid: {record_dict}"
                 )
+                request_counter.increment_invalid()
                 return json.dumps(record_dict)
 
         # All validations passed
@@ -221,6 +236,7 @@ def validate_schema(record: str) -> str:
 
         record_dict["metadata"]["processed_at"] = datetime.utcnow().isoformat()
         logger.debug(f"Record after processing: {record_dict}")
+        request_counter.increment_valid()
         return json.dumps(record_dict)
 
     except Exception as e:
@@ -232,6 +248,7 @@ def validate_schema(record: str) -> str:
             "metadata": {"processed_at": datetime.utcnow().isoformat()},
         }
         logger.error(f"Error processing record: {record}, error: {e}, data: {data}")
+        request_counter.increment_invalid()
         return json.dumps(data)
 
 
