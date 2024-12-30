@@ -33,7 +33,7 @@ warnings.filterwarnings("ignore", category=UserWarning, module="feast.utils")
 
 
 # Configure environment variables
-KAFKA_BOOTSTRAP_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
+KAFKA_BOOTSTRAP_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "kafka-broker:9092")
 KAFKA_FEATURE_TOPIC = os.getenv("KAFKA_FEATURES_TOPIC", "feature-events-topic")
 
 # Define the schema using PySpark's StructType
@@ -102,7 +102,7 @@ def verify_online_features(
     Returns:
         Dict containing the features if found, None otherwise
     """
-    url = "http://localhost:8002/features"
+    url = "http://feature-retrieval:8001/features"
     payload = {
         "user_id": user_id,
         "product_id": product_id,
