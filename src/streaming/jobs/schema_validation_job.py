@@ -1,10 +1,12 @@
 import json
 import os
+import sys
 import time
 from datetime import datetime
 from threading import Lock
 from typing import Any, Dict, Tuple
 
+from loguru import logger
 from pyflink.common import WatermarkStrategy
 from pyflink.common.typeinfo import Types
 from pyflink.datastream import StreamExecutionEnvironment
@@ -12,6 +14,13 @@ from pyflink.datastream import StreamExecutionEnvironment
 from ..connectors.sinks.kafka_sink import build_sink
 from ..connectors.sources.kafka_source import build_source
 from ..jobs.base import FlinkJob
+
+# Configure logger
+logger.remove()
+logger.add(
+    sys.stderr,
+    level=os.getenv("LOG_LEVEL", "INFO"),
+)
 
 
 class RequestCounter:
@@ -25,7 +34,7 @@ class RequestCounter:
             self.count += 1
             current_time = time.time()
             if current_time - self.last_log_time >= 1.0:
-                print(f"Processed {self.count} records in the last second")
+                logger.info(f"Processed {self.count} records in the last second")
                 self.count = 0
                 self.last_log_time = current_time
 
@@ -35,19 +44,29 @@ request_counter = RequestCounter()
 
 def validate_field_type(value: Any, field_def: Dict) -> bool:
     """Validate a field's type against its schema definition."""
+    # Handle null values first
+    if value is None:
+        # If type is a list and includes "null", or if field is optional, null is valid
+        if isinstance(field_def.get("type"), list):
+            return "null" in field_def["type"]
+        return field_def.get("optional", False)
+
+    # Get the field type
     field_type = (
         field_def.get("name")
         if field_def.get("name", "").startswith("io.debezium.time")
-        else field_def["type"]
+        else field_def.get("type")
     )
 
-    # Handle null values for optional fields
-    if value is None:
-        return field_def.get("optional", False)
+    # Handle array type definitions (like ["null", "string"])
+    if isinstance(field_type, list):
+        # Get the non-null type for validation
+        field_type = next((t for t in field_type if t != "null"), field_type[0])
 
     type_validators = {
         "string": lambda v: isinstance(v, str),
         "int64": lambda v: isinstance(v, int),
+        "long": lambda v: isinstance(v, int),
         "double": lambda v: isinstance(v, (float, int)),
         "boolean": lambda v: isinstance(v, bool),
         "io.debezium.time.MicroTimestamp": lambda v: isinstance(v, int) and v >= 0,
@@ -57,7 +76,15 @@ def validate_field_type(value: Any, field_def: Dict) -> bool:
     }
 
     validator = type_validators.get(field_type)
-    return validator and validator(value)
+    if not validator:
+        logger.warning(f"No validator found for type: {field_type}")
+        return True  # Skip validation for unknown types
+
+    is_valid = validator(value)
+    logger.debug(
+        f"Validating type for value: {value}, type: {field_type}, result: {is_valid}"
+    )
+    return is_valid
 
 
 def _is_valid_timestamp(value: str) -> bool:
@@ -75,42 +102,66 @@ def _is_valid_timestamp(value: str) -> bool:
             return True
         except ValueError:
             continue
+    logger.debug(f"Timestamp {value} is not valid")
     return False
+
+
+def get_field_name(field_def: Dict) -> str:
+    """Get field name from field definition, handling both schema formats."""
+    return field_def.get("field") or field_def.get("name")
 
 
 def validate_field_value(value: Any, field_def: Dict) -> Tuple[bool, str]:
     """Validate a field's value constraints."""
-    field_name = field_def["field"]
+    field_name = get_field_name(field_def)
+    logger.debug(f"Validating value for field: {field_name}, value: {value}")
 
     if field_name == "price" and value is not None:
-        return (value > 0, "Price should be greater than 0")
+        is_valid = value > 0
+        error_message = "Price should be greater than 0" if not is_valid else None
+        logger.debug(f"Price validation result: {is_valid}, error: {error_message}")
+        return (is_valid, error_message)
 
     if field_name == "event_type" and value is not None:
         valid_types = ["view", "cart", "purchase", "remove_from_cart"]
+        is_valid = value in valid_types
+        error_message = (
+            f"Event type should be one of: {', '.join(valid_types)}"
+            if not is_valid
+            else None
+        )
+        logger.debug(
+            f"Event type validation result: {is_valid}, error: {error_message}"
+        )
         return (
-            value in valid_types,
-            f"Event type should be one of: {', '.join(valid_types)}",
+            is_valid,
+            error_message,
         )
 
+    logger.debug(f"No specific validation for field: {field_name}")
     return True, None
 
 
 def validate_schema(record: str) -> str:
     """Validate a record against its schema."""
     request_counter.increment()
+    logger.debug(f"Validating record: {record}")
 
     try:
         record_dict = json.loads(record) if isinstance(record, str) else record
+        logger.debug(f"Record after json load: {record_dict}")
 
         if "metadata" not in record_dict:
             record_dict["metadata"] = {}
+            logger.debug(f"Added metadata to record: {record_dict}")
 
         schema = record_dict["schema"]
         payload = record_dict["payload"]
+        logger.debug(f"Schema: {schema}, Payload: {payload}")
 
         # Validate each field
         for field in schema["fields"]:
-            field_name = field["field"]
+            field_name = get_field_name(field)
 
             # Check if required field is present
             if field_name not in payload and not field.get("optional", False):
@@ -121,10 +172,16 @@ def validate_schema(record: str) -> str:
                         "error_type": "SCHEMA_VALIDATION_ERROR",
                     }
                 )
+                logger.debug(
+                    f"Field {field_name} is required but not present. Record marked as invalid: {record_dict}"
+                )
                 return json.dumps(record_dict)
 
             # Skip validation for missing optional fields
             if field_name not in payload:
+                logger.debug(
+                    f"Field {field_name} is optional and not present. Skipping validation."
+                )
                 continue
 
             # Validate type
@@ -135,6 +192,9 @@ def validate_schema(record: str) -> str:
                         "error_message": f"Field {field_name} has invalid type",
                         "error_type": "SCHEMA_VALIDATION_ERROR",
                     }
+                )
+                logger.debug(
+                    f"Field {field_name} has invalid type. Record marked as invalid: {record_dict}"
                 )
                 return json.dumps(record_dict)
 
@@ -148,14 +208,19 @@ def validate_schema(record: str) -> str:
                         "error_type": "SCHEMA_VALIDATION_ERROR",
                     }
                 )
+                logger.debug(
+                    f"Field {field_name} has invalid value. Record marked as invalid: {record_dict}"
+                )
                 return json.dumps(record_dict)
 
         # All validations passed
         record_dict.update(
             {"valid": "VALID", "error_message": None, "error_type": None}
         )
+        logger.debug(f"All validations passed. Record marked as valid: {record_dict}")
 
         record_dict["metadata"]["processed_at"] = datetime.utcnow().isoformat()
+        logger.debug(f"Record after processing: {record_dict}")
         return json.dumps(record_dict)
 
     except Exception as e:
@@ -166,6 +231,7 @@ def validate_schema(record: str) -> str:
             "raw_data": record,
             "metadata": {"processed_at": datetime.utcnow().isoformat()},
         }
+        logger.error(f"Error processing record: {record}, error: {e}, data: {data}")
         return json.dumps(data)
 
 
