@@ -1,5 +1,6 @@
 import json
 import os
+import time
 from datetime import datetime
 
 from pyflink.common import Types, WatermarkStrategy
@@ -8,14 +9,22 @@ from pyflink.datastream import StreamExecutionEnvironment
 from ..connectors.sinks.kafka_sink import build_sink
 from ..connectors.sources.kafka_source import build_source
 from ..jobs.base import FlinkJob
+from ..utils.metrics import RequestCounter, logger
+
+# Initialize request counter for this job
+request_counter = RequestCounter(name="feature_calculation")
 
 
 def parse_and_validate_event(event: str) -> str:
     """Parse and validate the event data."""
+    start_time = time.time()
     try:
         data = json.loads(event)
         if data.get("valid") != "VALID":
-            print(f"Invalid event: {data.get('error_message')}")
+            logger.debug(f"Invalid event: {data.get('error_message')}")
+            request_counter.increment_failure()
+            processing_time = (time.time() - start_time) * 1000
+            request_counter.add_processing_time(processing_time)
             return None
 
         payload = data.get("payload", {})
@@ -23,7 +32,10 @@ def parse_and_validate_event(event: str) -> str:
             k in payload
             for k in ["event_time", "user_id", "product_id", "user_session"]
         ):
-            print(f"Missing required fields in payload: {payload}")
+            logger.debug(f"Missing required fields in payload: {payload}")
+            request_counter.increment_failure()
+            processing_time = (time.time() - start_time) * 1000
+            request_counter.add_processing_time(processing_time)
             return None
 
         # Extract fields from payload and keep category_code for feature calculation
@@ -33,20 +45,25 @@ def parse_and_validate_event(event: str) -> str:
             "product_id": payload["product_id"],
             "user_session": payload["user_session"],
             "event_type": payload.get("event_type"),
-            "category_code": payload.get(
-                "category_code"
-            ),  # Keep the full category_code
+            "category_code": payload.get("category_code"),
             "price": payload.get("price", 0.0),
             "brand": payload.get("brand"),
         }
+        request_counter.increment_success()
+        processing_time = (time.time() - start_time) * 1000
+        request_counter.add_processing_time(processing_time)
         return json.dumps(extracted)
     except Exception as e:
-        print(f"Error parsing event: {str(e)}")
+        logger.error(f"Error parsing event: {str(e)}")
+        request_counter.increment_failure()
+        processing_time = (time.time() - start_time) * 1000
+        request_counter.add_processing_time(processing_time)
         return None
 
 
 def calculate_features(event: str) -> str:
     """Calculate features from the event data."""
+    start_time = time.time()
     try:
         data = json.loads(event)
 
@@ -73,9 +90,15 @@ def calculate_features(event: str) -> str:
             }
         )
 
+        request_counter.increment_success()
+        processing_time = (time.time() - start_time) * 1000
+        request_counter.add_processing_time(processing_time)
         return json.dumps(data)
     except Exception as e:
-        print(f"Error calculating features: {str(e)}")
+        logger.error(f"Error calculating features: {str(e)}")
+        request_counter.increment_failure()
+        processing_time = (time.time() - start_time) * 1000
+        request_counter.add_processing_time(processing_time)
         return None
 
 

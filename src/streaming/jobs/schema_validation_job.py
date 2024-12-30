@@ -1,12 +1,9 @@
 import json
 import os
-import sys
 import time
 from datetime import datetime
-from threading import Lock
 from typing import Any, Dict, Tuple
 
-from loguru import logger
 from pyflink.common import WatermarkStrategy
 from pyflink.common.typeinfo import Types
 from pyflink.datastream import StreamExecutionEnvironment
@@ -14,57 +11,10 @@ from pyflink.datastream import StreamExecutionEnvironment
 from ..connectors.sinks.kafka_sink import build_sink
 from ..connectors.sources.kafka_source import build_source
 from ..jobs.base import FlinkJob
+from ..utils.metrics import RequestCounter, logger
 
-# Configure logger
-logger.remove()
-logger.add(
-    sys.stderr,
-    level=os.getenv("LOG_LEVEL", "INFO"),
-)
-
-
-class RequestCounter:
-    def __init__(self):
-        self.valid_count = 0
-        self.invalid_count = 0
-        self.last_log_time = time.time()
-        self.lock = Lock()
-        self.processing_times = []
-        self.samples_threshold = 1_000
-
-    def increment_valid(self):
-        with self.lock:
-            self.valid_count += 1
-            self._check_and_log()
-
-    def increment_invalid(self):
-        with self.lock:
-            self.invalid_count += 1
-            self._check_and_log()
-
-    def add_processing_time(self, processing_time: float):
-        with self.lock:
-            self.processing_times.append(processing_time)
-            if len(self.processing_times) >= self.samples_threshold:
-                avg_time = sum(self.processing_times) / len(self.processing_times)
-                logger.info(
-                    f"Average processing time over last {self.samples_threshold} records: {avg_time:.2f}ms"
-                )
-                self.processing_times = []  # Reset for next batch
-
-    def _check_and_log(self):
-        current_time = time.time()
-        if current_time - self.last_log_time >= 1.0:
-            total = self.valid_count + self.invalid_count
-            logger.info(
-                f"Processed {total} records in the last second (Valid: {self.valid_count}, Invalid: {self.invalid_count})"
-            )
-            self.valid_count = 0
-            self.invalid_count = 0
-            self.last_log_time = current_time
-
-
-request_counter = RequestCounter()
+# Initialize request counter for this job
+request_counter = RequestCounter(name="schema_validation")
 
 
 def validate_field_type(value: Any, field_def: Dict) -> bool:
@@ -200,7 +150,7 @@ def validate_schema(record: str) -> str:
                 logger.debug(
                     f"Field {field_name} is required but not present. Record marked as invalid: {record_dict}"
                 )
-                request_counter.increment_invalid()
+                request_counter.increment_failure()
                 processing_time = (time.time() - start_time) * 1000
                 request_counter.add_processing_time(processing_time)
                 return json.dumps(record_dict)
@@ -224,7 +174,7 @@ def validate_schema(record: str) -> str:
                 logger.debug(
                     f"Field {field_name} has invalid type. Record marked as invalid: {record_dict}"
                 )
-                request_counter.increment_invalid()
+                request_counter.increment_failure()
                 processing_time = (time.time() - start_time) * 1000
                 request_counter.add_processing_time(processing_time)
                 return json.dumps(record_dict)
@@ -242,7 +192,7 @@ def validate_schema(record: str) -> str:
                 logger.debug(
                     f"Field {field_name} has invalid value. Record marked as invalid: {record_dict}"
                 )
-                request_counter.increment_invalid()
+                request_counter.increment_failure()
                 processing_time = (time.time() - start_time) * 1000
                 request_counter.add_processing_time(processing_time)
                 return json.dumps(record_dict)
@@ -255,7 +205,7 @@ def validate_schema(record: str) -> str:
 
         record_dict["metadata"]["processed_at"] = datetime.utcnow().isoformat()
         logger.debug(f"Record after processing: {record_dict}")
-        request_counter.increment_valid()
+        request_counter.increment_success()
         processing_time = (time.time() - start_time) * 1000
         request_counter.add_processing_time(processing_time)
         return json.dumps(record_dict)
@@ -269,7 +219,7 @@ def validate_schema(record: str) -> str:
             "metadata": {"processed_at": datetime.utcnow().isoformat()},
         }
         logger.error(f"Error processing record: {record}, error: {e}, data: {data}")
-        request_counter.increment_invalid()
+        request_counter.increment_failure()
         processing_time = (time.time() - start_time) * 1000
         request_counter.add_processing_time(processing_time)
         return json.dumps(data)
