@@ -1,7 +1,9 @@
 import os
 import warnings
+from typing import Any, Dict
 
 import pandas as pd
+import requests
 from feast import FeatureStore
 from feast.data_source import PushMode
 from feast.infra.contrib.spark_kafka_processor import (
@@ -72,6 +74,37 @@ spark = (
 
 # Initialize the feature store
 store = FeatureStore(repo_path=".")
+
+
+def verify_online_features(
+    user_id: int, product_id: int, user_session: str
+) -> Dict[str, Any]:
+    """Verify features were written to online store for a specific record.
+
+    Args:
+        user_id: User ID to check
+        product_id: Product ID to check
+        user_session: User session to check
+
+    Returns:
+        Dict containing the features if found, None otherwise
+    """
+    url = "http://localhost:8002/features"
+    payload = {
+        "user_id": user_id,
+        "product_id": product_id,
+        "user_session": user_session,
+    }
+
+    try:
+        response = requests.post(url, json=payload)
+        response.raise_for_status()
+        features = response.json()
+        logger.debug(f"Features found for user {user_id}: {features}")
+        return features
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Failed to verify features: {str(e)}")
+        return None
 
 
 def preprocess_fn(df: pd.DataFrame) -> pd.DataFrame:
@@ -151,6 +184,21 @@ def preprocess_fn(df: pd.DataFrame) -> pd.DataFrame:
                 df[col] = df[col].astype(dtype)
 
         logger.info(f"Successfully processed {len(df)} records")
+
+        # Verify first record in debug mode
+        if len(df) > 0:
+            sample_record = df.iloc[0]
+            logger.debug("Verifying first record in online store...")
+            features = verify_online_features(
+                user_id=int(sample_record["user_id"]),
+                product_id=int(sample_record["product_id"]),
+                user_session=str(sample_record["user_session"]),
+            )
+            if features:
+                logger.debug("✓ Record successfully written to online store")
+            else:
+                logger.warning("✗ Record not found in online store")
+
         return df
 
     except Exception as e:
