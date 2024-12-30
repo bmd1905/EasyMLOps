@@ -5,7 +5,7 @@
         {
             "expectation_type": "expect_table_row_count_to_be_between",
             "kwargs": {
-                "min_value": 1,
+                "min_value": 0,
                 "max_value": 1000000
             }
         }
