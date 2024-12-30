@@ -25,8 +25,10 @@ class FeatureRequest(BaseModel):
 async def get_features(request: FeatureRequest):
     result = store.get_online_features(
         features=[
-            "user_features:activity_count",
-            "user_features:unique_products_viewed",
+            "streaming_features:activity_count",
+            "streaming_features:event_weekday",
+            "streaming_features:is_purchased",
+            "streaming_features:brand",
             "product_features:price",
             "product_features:category_code_level1",
             "product_features:category_code_level2",
