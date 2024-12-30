@@ -15,19 +15,10 @@ def create_schema_and_table(
 ) -> None:
     """Create table and indexes based on schema definition"""
     try:
-        # Extract schema name and table name
-        schema_name = table_name.split(".")[0]
-        table_only = table_name.split(".")[1]  # noqa: F841
-
-        # Create schema
-        create_schema_sql = f"CREATE SCHEMA IF NOT EXISTS {schema_name};"
-        postgres_hook.run(create_schema_sql)
-
         # Create table
         columns = [f"{col} {dtype}" for col, dtype in schema_class.table_schema.items()]
         create_table_sql = f"""
-        DROP TABLE IF EXISTS {table_name} CASCADE;
-        CREATE TABLE {table_name} (
+        CREATE TABLE IF NOT EXISTS {table_name} (
             {', '.join(columns)}
         );
         """

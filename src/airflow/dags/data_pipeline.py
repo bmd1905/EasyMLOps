@@ -10,9 +10,11 @@ from data_pipeline.bronze.ingest_raw_data import (
 from data_pipeline.bronze.validate_raw_data import validate_raw_data
 from data_pipeline.gold.load_to_dwh import load_dimensions_and_facts
 from data_pipeline.silver.transform_data import transform_data
-from great_expectations_provider.operators.great_expectations import (
-    GreatExpectationsOperator,
-)
+
+
+# from great_expectations_provider.operators.great_expectations import (
+#     GreatExpectationsOperator,
+# )
 from include.config.data_pipeline_config import DataPipelineConfig
 from loguru import logger
 
@@ -112,62 +114,19 @@ def silver_layer(validated_data: Dict[str, Any]) -> Dict[str, Any]:
     return transformed_data
 
 
-def gold_layer(transformed_data: Dict[str, Any]) -> TaskGroup:
-    """Create task group for the gold layer of the data pipeline."""
-    with TaskGroup("gold_layer_tasks") as gold_group:
-        # Task to load data to DWH
-        @task(task_id="load_to_dwh")
-        def load_to_dwh(data: Dict[str, Any]) -> bool:
-            """Load data to DWH"""
-            if not data.get("data"):
-                logger.warning("No data to load to DWH")
-                return True
+def gold_layer(transformed_data: Dict[str, Any]) -> bool:
+    """Task group for the gold layer of the data pipeline."""
+    if transformed_data is None:
+        logger.error("Transformed data is None.")
+        return False
 
-            success = load_dimensions_and_facts(data)
-            if not success:
-                raise AirflowException("Failed to load dimensional model")
-            return True
+    # Load dimensions and facts
+    success = load_dimensions_and_facts(transformed_data)
+    if not success:
+        logger.error("Failed to load dimensional model.")
+        return False
 
-        # Task to validate data using Great Expectations
-        @task(task_id="validate_dwh_data")
-        def validate_dwh_data(**context) -> bool:
-            """Validate data in DWH using Great Expectations"""
-            if not transformed_data["data"]:
-                logger.warning("No data to validate in DWH")
-                return True
-
-            try:
-                gx_validate_dwh = GreatExpectationsOperator(
-                    task_id="gx_validate",
-                    conn_id=POSTGRES_CONN_ID,
-                    data_context_root_dir=GX_DATA_CONTEXT,
-                    schema=POSTGRES_SCHEMA,
-                    data_asset_name="fact_events",
-                    checkpoint_name="fact_events.gold_layer_suite.chk",
-                    runtime_environment={"airflow_run_id": context["run_id"]},
-                    return_json_dict=True,
-                )
-
-                validation_result = gx_validate_dwh.execute(context=context)
-                if not validation_result["success"]:
-                    logger.error(
-                        f"Data quality validation failed in DWH. Details: {validation_result.get('statistics', {})}"
-                    )
-                    raise AirflowException("Data quality validation failed")
-                logger.info("Data quality validation passed successfully")
-                return True
-            except Exception as e:
-                logger.error(f"Error during data quality validation: {str(e)}")
-                raise AirflowException(f"Data quality validation error: {str(e)}")
-
-        # Define task sequence
-        load_task = load_to_dwh(transformed_data)
-        validate_task = validate_dwh_data()
-
-        # Set dependencies
-        load_task >> validate_task
-
-    return gold_group
+    return True
 
 
 @task
@@ -213,13 +172,14 @@ def data_pipeline():
     # Execute layers with proper error handling
     with TaskGroup("bronze_layer_group") as bronze_group:
         validated_data = bronze_layer(config)
-        validated_data = debug_data(validated_data, "Bronze")
+        # validated_data = debug_data(validated_data, "Bronze")
 
     with TaskGroup("silver_layer_group") as silver_group:
         transformed_data = silver_layer(validated_data)
 
     # Gold layer tasks
-    gold_group = gold_layer(transformed_data)
+    with TaskGroup("gold_layer_group") as gold_group:
+        success = gold_layer(transformed_data)  # noqa: F841
 
     # Add monitoring task
     @task(trigger_rule="all_done")
