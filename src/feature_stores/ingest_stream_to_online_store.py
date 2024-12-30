@@ -1,5 +1,7 @@
 import os
 import warnings
+from collections import defaultdict
+from datetime import datetime, timedelta
 from typing import Any, Dict
 
 import pandas as pd
@@ -75,6 +77,17 @@ spark = (
 # Initialize the feature store
 store = FeatureStore(repo_path=".")
 
+# Global session activity counter
+session_activity_counts = defaultdict(int)
+
+# Session timeout
+SESSION_TIMEOUT = timedelta(
+    hours=24 * 365 * 10
+)  # Adjust timeout as needed, I used 10 years because I'm paranoid
+
+# Session last seen time
+session_last_seen = defaultdict(datetime.now)
+
 
 def verify_online_features(
     user_id: int, product_id: int, user_session: str
@@ -89,7 +102,7 @@ def verify_online_features(
     Returns:
         Dict containing the features if found, None otherwise
     """
-    url = "http://localhost:8002/features"
+    url = "http://localhost:8001/features"
     payload = {
         "user_id": user_id,
         "product_id": product_id,
@@ -105,6 +118,23 @@ def verify_online_features(
     except requests.exceptions.RequestException as e:
         logger.error(f"Failed to verify features: {str(e)}")
         return None
+
+
+def cleanup_old_sessions():
+    """Remove sessions that haven't been seen for a while"""
+    current_time = datetime.now()
+    expired_sessions = [
+        session_id
+        for session_id, last_seen in session_last_seen.items()
+        if current_time - last_seen > SESSION_TIMEOUT
+    ]
+
+    for session_id in expired_sessions:
+        del session_activity_counts[session_id]
+        del session_last_seen[session_id]
+
+    if expired_sessions:
+        logger.info(f"Cleaned up {len(expired_sessions)} expired sessions")
 
 
 def preprocess_fn(df: pd.DataFrame) -> pd.DataFrame:
@@ -131,6 +161,9 @@ def preprocess_fn(df: pd.DataFrame) -> pd.DataFrame:
         df["price"] = df["price"].fillna(0.0)
         df["event_type"] = df["event_type"].fillna("")
         df["user_id"] = df["user_id"].fillna(-1)
+        df["brand"] = df["brand"].fillna("")
+        df["category_code_level1"] = df["category_code_level1"].fillna("")
+        df["category_code_level2"] = df["category_code_level2"].fillna("")
 
         # Convert timestamp to datetime if needed
         if df["event_timestamp"].dtype != "datetime64[ns]":
@@ -148,23 +181,42 @@ def preprocess_fn(df: pd.DataFrame) -> pd.DataFrame:
         # Calculate temporal features
         df["event_weekday"] = df["event_timestamp"].dt.weekday.astype("int64")
 
-        # Calculate features with proper NaN handling
-        df["activity_count"] = 1
-        df["total_price"] = df["price"]
-        df["avg_price"] = df.groupby("user_id")["price"].transform("mean")
+        # Update activity counts and last seen time for each session
+        current_time = datetime.now()
+        for session_id in df["user_session"].unique():
+            session_activity_counts[session_id] += len(
+                df[df["user_session"] == session_id]
+            )
+            session_last_seen[session_id] = current_time
+
+        # Cleanup old sessions periodically
+        cleanup_old_sessions()
+
+        # Add activity count from the session tracker
+        df["activity_count"] = (
+            df["user_session"].map(session_activity_counts).astype("int64")
+        )
+
+        # Calculate purchase flag
         df["is_purchased"] = (
             (df["event_type"].str.lower() == "purchase").fillna(False).astype("int64")
         )
+
+        # Handle price
+        df["price"] = df["price"].fillna(0.0).astype("float64")
 
         # Ensure all required columns exist with proper types
         required_features = {
             "event_timestamp": "datetime64[ns]",
             "user_id": "int64",
+            "product_id": "int64",
             "activity_count": "int64",
-            "total_price": "float64",
-            "avg_price": "float64",
+            "price": "float64",
             "is_purchased": "int64",
             "event_weekday": "int64",
+            "brand": "string",
+            "category_code_level1": "string",
+            "category_code_level2": "string",
         }
 
         # Convert types after handling all missing values
@@ -178,6 +230,8 @@ def preprocess_fn(df: pd.DataFrame) -> pd.DataFrame:
                 df[col] = df[col].fillna(0)
             elif dtype == "float64":
                 df[col] = df[col].fillna(0.0)
+            elif dtype == "string":
+                df[col] = df[col].fillna("")
 
             # Skip timestamp as it's already handled
             if col != "event_timestamp":
@@ -196,6 +250,9 @@ def preprocess_fn(df: pd.DataFrame) -> pd.DataFrame:
             )
             if features:
                 logger.debug("✓ Record successfully written to online store")
+                logger.debug(
+                    f"Activity count for session {sample_record['user_session']}: {sample_record['activity_count']}"
+                )
             else:
                 logger.warning("✗ Record not found in online store")
 
@@ -203,6 +260,7 @@ def preprocess_fn(df: pd.DataFrame) -> pd.DataFrame:
 
     except Exception as e:
         logger.error(f"Error preprocessing data: {str(e)}")
+        logger.error(f"Column dtypes: {df.dtypes}")
         logger.error(
             f"Sample timestamp value: {df['event_timestamp'].iloc[0] if len(df) > 0 else 'No data'}"
         )

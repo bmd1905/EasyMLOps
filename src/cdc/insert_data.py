@@ -40,7 +40,7 @@ def format_record(row):
 def load_sample_data():
     """Load and prepare sample data from parquet file"""
     try:
-        df = pd.read_parquet(SAMPLE_DATA_PATH)[:10_000]
+        df = pd.read_parquet(SAMPLE_DATA_PATH)
         records = []
         for idx, row in df.iterrows():
             record = format_record(row)

@@ -156,13 +156,13 @@ view-consumer-groups:
 
 # ------------- Feature Store Commands
 start-feature-store:
-	cd src/feature_stores && ./run.sh && . .venv/bin/activate && python materialize_features.py && uvicorn api:app --host 0.0.0.0 --port 8001 --reload
+	cd src/feature_stores && ./run.sh && . .venv/bin/activate && python materialize_features.py && uvicorn api:app --host 0.0.0.0 --port 8002 --reload
 
 materialize-features:
 	cd src/feature_stores && . .venv/bin/activate && python materialize_features.py
 
 start-feature-service:
-	cd src/feature_stores && . .venv/bin/activate && uvicorn api:app --host 0.0.0.0 --port 8001 --reload
+	cd src/feature_stores && . .venv/bin/activate && uvicorn api:app --host 0.0.0.0 --port 8002 --reload
 
 # ------------- Streaming Commands
 producer:
@@ -187,6 +187,10 @@ cdc_setup:
 insert_cdc_data:
 	uv run $(PYTHON) -m src.cdc.create_table
 	uv run $(PYTHON) -m src.cdc.insert_data
+
+# ------------- Online Store Commands
+ingest_stream_to_online_store:
+	cd src/feature_stores && . .venv/bin/activate && python ingest_stream_to_online_store.py
 
 # ------------- Help Command
 help:

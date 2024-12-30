@@ -34,7 +34,7 @@ def load_training_data() -> Dict[str, List[Dict]]:
         query = template.render(feature_columns=FEATURE_COLUMNS)
         logger.debug(f"Generated SQL query: {query}")
 
-        df = postgres_hook.get_pandas_df(query)[:1000]
+        df = postgres_hook.get_pandas_df(query)
         logger.info(f"Loaded {len(df)} rows with columns: {df.columns.tolist()}")
 
         # Data preprocessing

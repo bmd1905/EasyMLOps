@@ -40,12 +40,12 @@ class APIIngress:
         self._feature_service = feature_service
         self._prediction_service = prediction_service
         self._FEATURE_COLUMNS = [
-            "user_session",
-            "activity_count",
-            "unique_products_viewed",
+            "brand",
             "price",
+            "event_weekday",
             "category_code_level1",
             "category_code_level2",
+            "activity_count",
         ]
 
     @app.post("/predict")
