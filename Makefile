@@ -188,6 +188,10 @@ insert_cdc_data:
 	uv run $(PYTHON) -m src.cdc.create_table
 	uv run $(PYTHON) -m src.cdc.insert_data
 
+# ------------- Online Store Commands
+ingest_stream_to_online_store:
+	cd src/feature_stores && . .venv/bin/activate && python ingest_stream_to_online_store.py
+
 # ------------- Help Command
 help:
 	@echo "Available commands:"
