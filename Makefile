@@ -12,6 +12,7 @@ MONITOR_COMPOSE_FILE := docker-compose.monitor.yaml
 MLFLOW_COMPOSE_FILE := docker-compose.mlflow.yaml
 CDC_COMPOSE_FILE := docker-compose.cdc.yaml
 SERVING_COMPOSE_FILE := src/serving/docker-compose.serving.yaml
+NGINX_COMPOSE_FILE := docker-compose.nginx.yaml
 PYTHON := python3
 
 # Docker Compose Commands
@@ -49,6 +50,9 @@ up-cdc:
 up-serving:
 	docker compose -f $(SERVING_COMPOSE_FILE) up -d --build
 
+up-nginx:
+	docker compose -f $(NGINX_COMPOSE_FILE) up -d --build
+
 down-network:
 	docker network rm easydatapipeline_default
 
@@ -82,6 +86,9 @@ down-cdc:
 down-serving:
 	docker compose -f $(SERVING_COMPOSE_FILE) down
 
+down-nginx:
+	docker compose -f $(NGINX_COMPOSE_FILE) down -v
+
 restart-kafka: down-kafka up-kafka
 restart-airflow: down-airflow up-airflow
 restart-data-lake: down-data-lake up-data-lake
@@ -92,11 +99,7 @@ restart-monitor: down-monitor up-monitor
 restart-mlflow: down-mlflow up-mlflow
 restart-cdc: down-cdc up-cdc
 restart-serving: down-serving up-serving
-
-# Convenience Commands
-up: up-network up-kafka up-airflow up-data-lake up-dwh up-online-store up-ray-cluster up-monitor up-mlflow deploy_s3_connector
-down: down-kafka down-airflow down-data-lake down-dwh down-online-store down-ray-cluster down-monitor down-network down-cdc down-serving
-restart: down up
+restart-nginx: down-nginx up-nginx
 
 # Utility Commands
 logs-kafka:
@@ -129,6 +132,9 @@ logs-cdc:
 logs-serving:
 	docker compose -f $(SERVING_COMPOSE_FILE) logs -f
 
+logs-nginx:
+	docker compose -f $(NGINX_COMPOSE_FILE) logs -f
+
 clean:
 	docker compose -f $(KAFKA_COMPOSE_FILE) down -v
 	docker compose -f $(AIRFLOW_COMPOSE_FILE) down -v
@@ -140,6 +146,7 @@ clean:
 	docker compose -f $(MLFLOW_COMPOSE_FILE) down -v
 	docker compose -f $(CDC_COMPOSE_FILE) down -v
 	docker compose -f $(SERVING_COMPOSE_FILE) down -v
+	docker compose -f $(NGINX_COMPOSE_FILE) down -v
 	docker system prune -f
 
 # ------------------------------------------ Utility Commands ------------------------------------------
