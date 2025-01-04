@@ -66,6 +66,24 @@ class PredictionService:
                 with self.tracer.start_span("prepare_features") as prep_span:  # noqa: F841
                     df = pd.DataFrame(features)
 
+                    # Define numeric columns and their types based on schema
+                    numeric_cols = {
+                        "price": "float32",
+                        "event_weekday": "int32",
+                        "activity_count": "int32",
+                        "user_id": "int32",
+                        "product_id": "int32",
+                    }
+
+                    # Convert numeric columns to proper types
+                    for col, dtype in numeric_cols.items():
+                        if col in df.columns:
+                            df[col] = (
+                                pd.to_numeric(df[col], errors="coerce")
+                                .fillna(0)
+                                .astype(dtype)
+                            )
+
                     # Encode categorical columns
                     categorical_cols = [
                         "brand",
@@ -75,7 +93,10 @@ class PredictionService:
                     for col in categorical_cols:
                         if col in df.columns:
                             mapping = self.category_mappings.get(col, {})
-                            df[col] = df[col].map(mapping).fillna(-1).astype("int64")
+                            df[col] = df[col].map(mapping).fillna(-1).astype("int32")
+
+                    logger.debug(f"DataFrame dtypes after conversion: {df.dtypes}")
+                    logger.debug(f"DataFrame head: {df.head()}")
 
                     # Create DMatrix with categorical features enabled
                     dmatrix = xgb.DMatrix(
@@ -96,4 +117,8 @@ class PredictionService:
 
         except Exception as e:
             logger.error(f"Prediction failed: {str(e)}")
+            logger.error(
+                f"DataFrame dtypes: {df.dtypes if 'df' in locals() else 'DataFrame not created'}"
+            )
+            logger.error(f"Features received: {features}")
             return {"predictions": [], "success": False, "error": str(e)}
