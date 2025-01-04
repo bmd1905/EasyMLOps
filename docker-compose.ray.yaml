@@ -34,7 +34,7 @@ services:
 
   ray-worker:
     build:
-      context: .
+      context: ./src/ray
       dockerfile: Dockerfile
     depends_on:
       - ray-head

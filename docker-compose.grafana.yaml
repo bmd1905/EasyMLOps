@@ -2,12 +2,12 @@ services:
   prometheus:
     image: prom/prometheus:v2.38.0
     container_name: prometheus
-    restart: unless-stopped
+    restart: always
     user: root
     volumes:
       - prometheus_data:/prometheus
       - /tmp/ray:/tmp/ray
-      - ./src/prometheus/config/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./src/observability/prometheus/config/prometheus.yml:/etc/prometheus/prometheus.yml
       # - ./src/prometheus/config/alert-rules.yml:/etc/prometheus/alert-rules.yml
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
@@ -25,13 +25,13 @@ services:
   grafana:
     image: grafana/grafana:latest
     container_name: grafana
-    restart: unless-stopped
+    restart: always
     user: root
     volumes:
       - grafana_data:/var/lib/grafana
       - /tmp/ray/session_latest/metrics/grafana/dashboards:/opt/grafana/dashboards:ro
-      - ./src/grafana/config/dashboards.yaml:/etc/grafana/provisioning/dashboards/dashboards.yaml:ro
-      - ./src/grafana/config/datasources.yaml:/etc/grafana/provisioning/datasources/datasource.yaml:ro
+      - ./src/observability/grafana/config/dashboards.yaml:/etc/grafana/provisioning/dashboards/dashboards.yaml:ro
+      - ./src/observability/grafana/config/datasources.yaml:/etc/grafana/provisioning/datasources/datasource.yaml:ro
     environment:
       - GF_SECURITY_ADMIN_USER=${ADMIN_USER:-admin}
       - GF_SECURITY_ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin}

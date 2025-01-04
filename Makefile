@@ -3,17 +3,17 @@
 
 # Configuration
 KAFKA_COMPOSE_FILE := docker-compose.kafka.yaml
-AIRFLOW_COMPOSE_FILE := src/airflow/docker-compose.airflow.yaml
+AIRFLOW_COMPOSE_FILE := src/orchestration/docker-compose.airflow.yaml
 DATA_LAKE_COMPOSE_FILE := docker-compose.data-lake.yaml
 DWH_COMPOSE_FILE := docker-compose.dwh.yaml
 ONLINE_STORE_COMPOSE_FILE := docker-compose.online-store.yaml
 RAY_COMPOSE_FILE := src/ray/docker-compose.ray.yaml
-MONITOR_COMPOSE_FILE := docker-compose.monitor.yaml
+MONITOR_COMPOSE_FILE := docker-compose.grafana.yaml
 MLFLOW_COMPOSE_FILE := docker-compose.mlflow.yaml
 CDC_COMPOSE_FILE := docker-compose.cdc.yaml
 SERVING_COMPOSE_FILE := src/serving/docker-compose.serving.yaml
 NGINX_COMPOSE_FILE := docker-compose.nginx.yaml
-OBSERVABILITY_COMPOSE_FILE := ./src/observability/clickhouse-setup/docker-compose-minimal.yaml
+OBSERVABILITY_COMPOSE_FILE := ./src/observability/signoz/clickhouse-setup/docker-compose-minimal.yaml
 PYTHON := python3
 
 # Docker Compose Commands
