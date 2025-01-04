@@ -23,7 +23,7 @@ case $cmd in
             exit 1
         else
             echo "Registering a new connector from $2"
-            curl -i -X POST -H "Accept:application/json" -H 'Content-Type: application/json' http://kafka-connect:8083/connectors -d @$2
+            curl -i -X POST -H "Accept:application/json" -H 'Content-Type: application/json' http://cdc-debezium:8083/connectors -d @$2
         fi
         ;;
     *)
