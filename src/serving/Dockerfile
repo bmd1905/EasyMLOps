@@ -9,11 +9,15 @@ RUN apt-get update && apt-get install -y \
 
 # Copy requirements first to leverage Docker cache
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+
+# Clean pip cache and install dependencies
+RUN pip cache purge && \
+    pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
 COPY . .
 
+ENV PYTHONPATH=/app
 ENV RAY_ADDRESS="ray://ray-head:10001"
 
 EXPOSE 8000

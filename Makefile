@@ -13,6 +13,7 @@ MLFLOW_COMPOSE_FILE := docker-compose.mlflow.yaml
 CDC_COMPOSE_FILE := docker-compose.cdc.yaml
 SERVING_COMPOSE_FILE := src/serving/docker-compose.serving.yaml
 NGINX_COMPOSE_FILE := docker-compose.nginx.yaml
+OBSERVABILITY_COMPOSE_FILE := ./src/observability/clickhouse-setup/docker-compose-minimal.yaml
 PYTHON := python3
 
 # Docker Compose Commands
@@ -53,6 +54,9 @@ up-serving:
 up-nginx:
 	docker compose -f $(NGINX_COMPOSE_FILE) up -d --build
 
+up-observability:
+	docker compose -f $(OBSERVABILITY_COMPOSE_FILE) up -d --build
+
 down-network:
 	docker network rm easydatapipeline_default
 
@@ -89,6 +93,9 @@ down-serving:
 down-nginx:
 	docker compose -f $(NGINX_COMPOSE_FILE) down -v
 
+down-observability:
+	docker compose -f $(OBSERVABILITY_COMPOSE_FILE) down -v
+
 restart-kafka: down-kafka up-kafka
 restart-airflow: down-airflow up-airflow
 restart-data-lake: down-data-lake up-data-lake
@@ -100,6 +107,7 @@ restart-mlflow: down-mlflow up-mlflow
 restart-cdc: down-cdc up-cdc
 restart-serving: down-serving up-serving
 restart-nginx: down-nginx up-nginx
+restart-observability: down-observability up-observability
 
 # Utility Commands
 logs-kafka:
@@ -135,6 +143,9 @@ logs-serving:
 logs-nginx:
 	docker compose -f $(NGINX_COMPOSE_FILE) logs -f
 
+logs-observability:
+	docker compose -f $(OBSERVABILITY_COMPOSE_FILE) logs -f
+
 clean:
 	docker compose -f $(KAFKA_COMPOSE_FILE) down -v
 	docker compose -f $(AIRFLOW_COMPOSE_FILE) down -v
@@ -147,6 +158,7 @@ clean:
 	docker compose -f $(CDC_COMPOSE_FILE) down -v
 	docker compose -f $(SERVING_COMPOSE_FILE) down -v
 	docker compose -f $(NGINX_COMPOSE_FILE) down -v
+	docker compose -f $(OBSERVABILITY_COMPOSE_FILE) down -v
 	docker system prune -f
 
 # ------------------------------------------ Utility Commands ------------------------------------------
@@ -210,25 +222,3 @@ help:
 	@echo "  make clean           - Remove all containers and volumes"
 	@echo "  make logs-<service>  - View logs for specific service"
 	@echo "  make view-<service>  - View specific service"
-
-# ------------------------------------------ Pipeline Commands ------------------------------------------
-
-# Data pipeline
-up-data-pipeline:
-	make up-network
-	make up-kafka
-	make up-cdc
-	make up-airflow
-	make up-data-lake
-	make up-dwh
-	make cdc_setup
-	make deploy_s3_connector
-
-up-training-pipeline:
-	make up-ray-cluster
-	make up-mlflow
-
-up-serving-pipeline:
-	make up-ray-cluster
-	make up-online-store
-	make up-serving

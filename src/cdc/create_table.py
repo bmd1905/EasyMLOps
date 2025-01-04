@@ -1,6 +1,7 @@
 import os
 
 from dotenv import load_dotenv
+from loguru import logger
 
 from .postgresql_client import PostgresSQLClient
 
@@ -8,6 +9,7 @@ load_dotenv()
 
 
 def main():
+    logger.info("Initializing PostgreSQL client")
     pc = PostgresSQLClient(
         port=os.getenv("POSTGRES_PORT"),
         database=os.getenv("POSTGRES_DB"),
@@ -16,10 +18,12 @@ def main():
     )
 
     # Drop events table if exists
+    logger.info("Dropping existing events table if it exists")
     drop_table_query = "DROP TABLE IF EXISTS events;"
     pc.execute_query(drop_table_query)
 
     # Create events table with timestamp format that matches your requirement
+    logger.info("Creating events table")
     create_table_query = """
         CREATE TABLE IF NOT EXISTS events (
             event_time TIMESTAMP WITH TIME ZONE DEFAULT timezone('UTC', now()),
@@ -35,8 +39,9 @@ def main():
     """
     try:
         pc.execute_query(create_table_query)
+        logger.success("Successfully created events table")
     except Exception as e:
-        print(f"Failed to create table with error: {e}")
+        logger.error(f"Failed to create table with error: {e}")
 
 
 if __name__ == "__main__":
