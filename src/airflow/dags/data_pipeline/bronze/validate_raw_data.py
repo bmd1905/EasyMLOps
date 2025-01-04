@@ -157,7 +157,7 @@ def validate_raw_data(raw_data: Dict[str, Any]) -> Dict[str, Any]:
 
         # Validate using Great Expectations
         gx_validate = GreatExpectationsOperator(
-            task_id="validate_raw_data_gx",
+            task_id="quality_check_raw_data",
             data_context_root_dir="include/gx",
             dataframe_to_validate=valid_df,
             data_asset_name="raw_data_asset",
