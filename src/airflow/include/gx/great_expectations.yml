@@ -61,6 +61,19 @@ datasources:
       module_name: great_expectations.execution_engine
     data_connectors:
       default_runtime_connector:
+        name: default_runtime_connector
+        class_name: RuntimeDataConnector
+        module_name: great_expectations.datasource.data_connector
+        batch_identifiers:
+          - airflow_run_id
+  gold_data_asset_runtime_datasource:
+    class_name: Datasource
+    module_name: great_expectations.datasource
+    execution_engine:
+      class_name: PandasExecutionEngine
+      module_name: great_expectations.execution_engine
+    data_connectors:
+      default_runtime_connector:
         class_name: RuntimeDataConnector
         module_name: great_expectations.datasource.data_connector
         batch_identifiers:
