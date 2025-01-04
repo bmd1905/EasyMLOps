@@ -29,7 +29,7 @@ class DataPipelineConfig:
             ),
             path_prefix=Variable.get(
                 "MINIO_PATH_PREFIX",
-                default_var="topics/validated-events-topic/year=2024/month=12",
+                default_var="topics/validated-events-topic/year=2025/month=01",
             ),
             schema_registry_url=Variable.get(
                 "SCHEMA_REGISTRY_URL", default_var="http://schema-registry:8081"
