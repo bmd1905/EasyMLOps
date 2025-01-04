@@ -4,6 +4,8 @@ import time
 from datetime import datetime
 from typing import Any, Dict, Tuple
 
+from kafka.admin import KafkaAdminClient
+from kafka.errors import KafkaError
 from pyflink.common import WatermarkStrategy
 from pyflink.common.typeinfo import Types
 from pyflink.datastream import StreamExecutionEnvironment
@@ -237,10 +239,33 @@ class SchemaValidationJob(FlinkJob):
             "KAFKA_INVALID_TOPIC", "invalidated-events-topic"
         )
         self.bootstrap_servers = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
+        self._admin_client = None
 
     @property
     def job_name(self) -> str:
         return "schema_validation"
+
+    @property
+    def admin_client(self):
+        """Lazy initialization of Kafka admin client."""
+        if self._admin_client is None:
+            self._admin_client = KafkaAdminClient(
+                bootstrap_servers=self.bootstrap_servers,
+                client_id="schema_validation_admin",
+            )
+        return self._admin_client
+
+    def check_topic_exists(self, topic: str) -> bool:
+        """Check if a Kafka topic exists."""
+        try:
+            topics = self.admin_client.list_topics()
+            exists = topic in topics
+            if not exists:
+                logger.warning(f"Topic {topic} does not exist")
+            return exists
+        except KafkaError as e:
+            logger.error(f"Error checking topic {topic}: {str(e)}")
+            return False
 
     def create_pipeline(self, env: StreamExecutionEnvironment):
         env.set_parallelism(4)
@@ -249,12 +274,20 @@ class SchemaValidationJob(FlinkJob):
             f"file://{self.jars_path}/kafka-clients-3.4.0.jar",
         )
 
-        # Create sources and sinks
-        sources = [
-            build_source(
-                topic.strip(), f"{self.group_id}-{topic}", self.bootstrap_servers
-            )
+        # Filter out non-existent topics
+        existing_topics = [
+            topic.strip()
             for topic in self.input_topics
+            if self.check_topic_exists(topic.strip())
+        ]
+
+        if not existing_topics:
+            raise ValueError("No valid input topics found")
+
+        # Create sources only for existing topics
+        sources = [
+            build_source(topic, f"{self.group_id}-{topic}", self.bootstrap_servers)
+            for topic in existing_topics
         ]
 
         valid_sink = build_sink(self.valid_topic, self.bootstrap_servers)
