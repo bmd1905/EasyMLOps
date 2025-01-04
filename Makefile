@@ -16,15 +16,15 @@ NGINX_COMPOSE_FILE := docker-compose.nginx.yaml
 OBSERVABILITY_COMPOSE_FILE := docker-compose.observability.yaml
 PYTHON := python3
 
-# Docker Compose Commands
 up-network:
 	docker network create easymlops_network
 
+# ------------------------------------------ Data and Training Pipeline Commands ------------------------------------------
 up-kafka:
 	docker compose -f $(KAFKA_COMPOSE_FILE) up -d --build
 
-up-orchestration:
-	docker compose -f $(ORCHESTRATION_COMPOSE_FILE) up -d --build
+up-cdc: up-kafka consumer
+	docker compose -f $(CDC_COMPOSE_FILE) up -d --build
 
 up-data-lake:
 	docker compose -f $(DATA_LAKE_COMPOSE_FILE) up -d --build
@@ -32,11 +32,7 @@ up-data-lake:
 up-dwh:
 	docker compose -f $(DWH_COMPOSE_FILE) up -d --build
 
-up-online-store:
-	docker compose -f $(ONLINE_STORE_COMPOSE_FILE) up -d --build
-
 up-ray-cluster:
-	docker build -t raytest ./src/ray
 	docker compose -f $(RAY_COMPOSE_FILE) up -d --build
 
 up-grafana:
@@ -45,10 +41,15 @@ up-grafana:
 up-model-registry:
 	docker compose -f $(MODEL_REGISTRY_COMPOSE_FILE) up -d --build
 
-up-cdc: up-kafka
-	docker compose -f $(CDC_COMPOSE_FILE) up -d --build
+up-orchestration: up-data-lake up-dwh up-ray-cluster up-model-registry up-grafana
+	docker compose -f $(ORCHESTRATION_COMPOSE_FILE) up -d --build
+	make deploy_s3_connector
 
-up-serving:
+# ------------------------------------------ Serving Pipeline Commands ------------------------------------------
+up-online-store:
+	docker compose -f $(ONLINE_STORE_COMPOSE_FILE) up -d --build
+
+up-serving: up-online-store
 	docker compose -f $(SERVING_COMPOSE_FILE) up -d --build
 
 up-nginx:
@@ -57,6 +58,7 @@ up-nginx:
 up-observability:
 	docker compose -f $(OBSERVABILITY_COMPOSE_FILE) up -d --build
 
+# ------------------------------------------ Down Commands ------------------------------------------
 down-network:
 	docker network rm easymlops_network
 
@@ -74,6 +76,7 @@ down-dwh:
 
 down-online-store:
 	docker compose -f $(ONLINE_STORE_COMPOSE_FILE) down
+	make start-feature-store
 
 down-ray-cluster:
 	docker compose -f $(RAY_COMPOSE_FILE) down -v
@@ -96,6 +99,7 @@ down-nginx:
 down-observability:
 	docker compose -f $(OBSERVABILITY_COMPOSE_FILE) down -v
 
+# ------------------------------------------ Restart Commands ------------------------------------------
 restart-kafka: down-kafka up-kafka
 restart-orchestration: down-orchestration up-orchestration
 restart-data-lake: down-data-lake up-data-lake
@@ -109,7 +113,7 @@ restart-serving: down-serving up-serving
 restart-nginx: down-nginx up-nginx
 restart-observability: down-observability up-observability
 
-# Utility Commands
+# ------------------------------------------ Logs Commands ------------------------------------------
 logs-kafka:
 	docker compose -f $(KAFKA_COMPOSE_FILE) logs -f
 
@@ -146,6 +150,7 @@ logs-nginx:
 logs-observability:
 	docker compose -f $(OBSERVABILITY_COMPOSE_FILE) logs -f
 
+# ------------------------------------------ Clean Commands ------------------------------------------
 clean:
 	docker compose -f $(KAFKA_COMPOSE_FILE) down -v
 	docker compose -f $(ORCHESTRATION_COMPOSE_FILE) down -v
@@ -173,7 +178,7 @@ view-schemas:
 view-consumer-groups:
 	docker compose -f $(KAFKA_COMPOSE_FILE) exec -it broker kafka-consumer-groups --bootstrap-server broker:9092 --list
 
-# ------------- Feature Store Commands
+# ------------------------------------------ Feature Store Commands ------------------------------------------
 start-feature-store:
 	cd src/feature_stores && ./run.sh && . .venv/bin/activate && python materialize_features.py && uvicorn api:app --host 0.0.0.0 --port 8002 --reload
 
@@ -183,15 +188,15 @@ materialize-features:
 start-feature-service:
 	cd src/feature_stores && . .venv/bin/activate && uvicorn api:app --host 0.0.0.0 --port 8002 --reload
 
-# ------------- Streaming Commands
+# ------------------------------------------ Streaming Commands ------------------------------------------
 producer:
 	uv run $(PYTHON) src/producer/produce.py -b=localhost:9092 -s=http://localhost:8081
 
 consumer:
 	uv run $(PYTHON) -m src.streaming.main schema_validation
 
-feature_calculation:
-	uv run $(PYTHON) -m src.streaming.main feature_calculation
+validated_events_to_features:
+	uv run $(PYTHON) -m src.streaming.main validated_events_to_features
 
 deploy_s3_connector:
 	uv run $(PYTHON) -m src.streaming.connectors.deploy_s3_connector
@@ -199,11 +204,10 @@ deploy_s3_connector:
 alert_invalid_events:
 	uv run $(PYTHON) -m src.streaming.main alert_invalid_events
 
-# ------------- Online Store Commands
-ingest_stream_to_online_store:
-	cd src/feature_stores && . .venv/bin/activate && python ingest_stream_to_online_store.py
+kafka_to_feast_online_store:
+	cd src/feature_stores && ./run.sh && . .venv/bin/activate && python ingest_stream_to_online_store.pyi
 
-# ------------- Help Command
+# ------------------------------------------ Help Command ------------------------------------------
 help:
 	@echo "Available commands:"
 	@echo "  make producer         - Run Kafka producer test"

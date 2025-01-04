@@ -12,7 +12,7 @@ from ..jobs.base import FlinkJob
 from ..utils.metrics import RequestCounter, logger
 
 # Initialize request counter for this job
-request_counter = RequestCounter(name="feature_calculation")
+request_counter = RequestCounter(name="validated_events_to_features")
 
 
 def parse_and_validate_event(event: str) -> str:
@@ -102,7 +102,7 @@ def calculate_features(event: str) -> str:
         return None
 
 
-class FeatureCalculationJob(FlinkJob):
+class ValidatedEventsToFeaturesJob(FlinkJob):
     def __init__(self):
         self.jars_path = f"{os.getcwd()}/src/streaming/connectors/config/jars/"
         self.input_topic = os.getenv("KAFKA_VALID_TOPIC", "validated-events-topic")
@@ -112,7 +112,7 @@ class FeatureCalculationJob(FlinkJob):
 
     @property
     def job_name(self) -> str:
-        return "feature_calculation"
+        return "validated_events_to_features"
 
     def create_pipeline(self, env: StreamExecutionEnvironment):
         # Add required JARs
