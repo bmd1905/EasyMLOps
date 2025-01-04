@@ -81,6 +81,21 @@ services:
     networks:
       - easymlops_network
 
+  cdc-python:
+    depends_on:
+      cdc-postgresql:
+        condition: service_healthy
+    build:
+      context: ./src/cdc
+      dockerfile: Dockerfile
+    container_name: cdc-python
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+    networks:
+      - easymlops_network
+
 volumes:
   cdc_postgres_data:
 
