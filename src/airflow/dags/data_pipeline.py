@@ -10,11 +10,9 @@ from data_pipeline.bronze.ingest_raw_data import (
 from data_pipeline.bronze.validate_raw_data import validate_raw_data
 from data_pipeline.gold.load_to_dwh import load_dimensions_and_facts
 from data_pipeline.silver.transform_data import transform_data
-
-
-# from great_expectations_provider.operators.great_expectations import (
-#     GreatExpectationsOperator,
-# )
+from great_expectations_provider.operators.great_expectations import (
+    GreatExpectationsOperator,
+)
 from include.config.data_pipeline_config import DataPipelineConfig
 from loguru import logger
 
@@ -114,19 +112,19 @@ def silver_layer(validated_data: Dict[str, Any]) -> Dict[str, Any]:
     return transformed_data
 
 
-def gold_layer(transformed_data: Dict[str, Any]) -> bool:
+def gold_layer(transformed_data: Dict[str, Any]) -> pd.DataFrame:
     """Task group for the gold layer of the data pipeline."""
     if transformed_data is None:
         logger.error("Transformed data is None.")
         return False
 
     # Load dimensions and facts
-    success = load_dimensions_and_facts(transformed_data)
-    if not success:
+    transformed_data = load_dimensions_and_facts(transformed_data)
+    if not transformed_data["success"]:
         logger.error("Failed to load dimensional model.")
         return False
 
-    return True
+    return transformed_data["data"]
 
 
 @task
@@ -139,6 +137,28 @@ def debug_data(data: Dict[str, Any], layer: str):
         logger.info(f"Shape: {df.shape}")
         logger.info(f"First row: {df.iloc[0].to_dict()}")
     return data
+
+
+@task
+def quality_check_gold_data(df: pd.DataFrame):
+    """Validate gold data using Great Expectations"""
+    try:
+        # Initialize Great Expectations validation
+        gx_validate = GreatExpectationsOperator(
+            task_id="quality_check_gold_data",
+            data_context_root_dir="include/gx",
+            dataframe_to_validate=df,
+            data_asset_name="gold_data_asset",
+            execution_engine="PandasExecutionEngine",
+            expectation_suite_name="gold_layer_suite",
+            return_json_dict=True,
+            fail_task_on_validation_failure=False,
+        )
+        return gx_validate.execute(context={})
+
+    except Exception as e:
+        logger.error(f"Data quality check failed: {str(e)}")
+        raise AirflowException(f"Data quality check failed: {str(e)}")
 
 
 @dag(
@@ -179,17 +199,11 @@ def data_pipeline():
 
     # Gold layer tasks
     with TaskGroup("gold_layer_group") as gold_group:
-        success = gold_layer(transformed_data)  # noqa: F841
-
-    # Add monitoring task
-    @task(trigger_rule="all_done")
-    def monitor_pipeline():
-        """Monitor pipeline execution and send metrics"""
-        # Add monitoring logic here
-        pass
+        gold_data = gold_layer(transformed_data)
+        quality_check_gold_data(gold_data)
 
     # Define dependencies
-    bronze_group >> silver_group >> gold_group >> monitor_pipeline()
+    bronze_group >> silver_group >> gold_group
 
 
 # Create DAG instance

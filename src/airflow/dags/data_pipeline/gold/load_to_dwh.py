@@ -79,7 +79,7 @@ def create_fact_events(df: pd.DataFrame, dims: Dict[str, pd.DataFrame]) -> pd.Da
 
 
 @task()
-def load_dimensions_and_facts(transformed_data: Dict[str, Any]) -> bool:
+def load_dimensions_and_facts(transformed_data: Dict[str, Any]) -> Dict[str, Any]:
     """Load dimensional model into Data Warehouse"""
     logger.info("Loading dimensions and facts into Data Warehouse")
     try:
@@ -121,7 +121,10 @@ def load_dimensions_and_facts(transformed_data: Dict[str, Any]) -> bool:
         # Create useful views
         create_analytical_views(postgres_hook)
 
-        return True
+        return {
+            "data": df,
+            "success": True,
+        }
 
     except Exception as e:
         logger.error(f"Failed to load dimensional model: {str(e)}")
