@@ -222,25 +222,3 @@ help:
 	@echo "  make clean           - Remove all containers and volumes"
 	@echo "  make logs-<service>  - View logs for specific service"
 	@echo "  make view-<service>  - View specific service"
-
-# ------------------------------------------ Pipeline Commands ------------------------------------------
-
-# Data pipeline
-up-data-pipeline:
-	make up-network
-	make up-kafka
-	make up-cdc
-	make up-airflow
-	make up-data-lake
-	make up-dwh
-	make cdc_setup
-	make deploy_s3_connector
-
-up-training-pipeline:
-	make up-ray-cluster
-	make up-mlflow
-
-up-serving-pipeline:
-	make up-ray-cluster
-	make up-online-store
-	make up-serving
