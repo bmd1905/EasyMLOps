@@ -37,42 +37,6 @@ ray.init(
 @serve.deployment(num_replicas=1)
 @serve.ingress(app)
 class APIIngress:
-    # Initialize Resource
-    resource = Resource.create({ResourceAttributes.SERVICE_NAME: "serving"})
-
-    # Initialize TracerProvider
-    trace.set_tracer_provider(TracerProvider(resource=resource))
-    otlp_span_exporter = OTLPSpanExporter(
-        endpoint="http://otel-collector:4317", insecure=True
-    )
-    span_processor = BatchSpanProcessor(otlp_span_exporter)
-    trace.get_tracer_provider().add_span_processor(span_processor)
-
-    # Initialize MeterProvider
-    metric_reader = PeriodicExportingMetricReader(
-        OTLPMetricExporter(endpoint="http://otel-collector:4317", insecure=True)
-    )
-    metrics.set_meter_provider(
-        MeterProvider(resource=resource, metric_readers=[metric_reader])
-    )
-
-    # Get tracer and meter
-    tracer = trace.get_tracer(__name__)
-    meter = metrics.get_meter(__name__)
-
-    # Create some metrics
-    request_counter = meter.create_counter(
-        name="request_counter",
-        description="Counts the number of requests",
-        unit="1",
-    )
-
-    request_duration = meter.create_histogram(
-        name="request_duration",
-        description="Duration of requests",
-        unit="ms",
-    )
-
     class PredictionRequest(BaseModel):
         user_id: int = 530834332
         product_id: int = 1005073
@@ -93,6 +57,46 @@ class APIIngress:
             "category_code_level2",
             "activity_count",
         ]
+
+        # Initialize telemetry
+        self._setup_telemetry()
+
+    def _setup_telemetry(self):
+        # Initialize Resource
+        resource = Resource.create({ResourceAttributes.SERVICE_NAME: "serving"})
+
+        # Initialize TracerProvider
+        trace.set_tracer_provider(TracerProvider(resource=resource))
+        otlp_span_exporter = OTLPSpanExporter(
+            endpoint="http://otel-collector:4317", insecure=True
+        )
+        span_processor = BatchSpanProcessor(otlp_span_exporter)
+        trace.get_tracer_provider().add_span_processor(span_processor)
+
+        # Initialize MeterProvider
+        metric_reader = PeriodicExportingMetricReader(
+            OTLPMetricExporter(endpoint="http://otel-collector:4317", insecure=True)
+        )
+        metrics.set_meter_provider(
+            MeterProvider(resource=resource, metric_readers=[metric_reader])
+        )
+
+        # Get tracer and meter
+        self.tracer = trace.get_tracer(__name__)
+        self.meter = metrics.get_meter(__name__)
+
+        # Create metrics
+        self.request_counter = self.meter.create_counter(
+            name="request_counter",
+            description="Counts the number of requests",
+            unit="1",
+        )
+
+        self.request_duration = self.meter.create_histogram(
+            name="request_duration",
+            description="Duration of requests",
+            unit="ms",
+        )
 
     @app.post("/predict")
     async def predict(self, requests: List[PredictionRequest]):

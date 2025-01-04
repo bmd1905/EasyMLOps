@@ -27,17 +27,30 @@ class PredictionService:
                 mlflow.set_tracking_uri(self.mlflow_uri)
                 client = MlflowClient()
 
-                # Get latest model version
-                latest_version = client.get_latest_versions(self.model_name)[0]
-                span.set_attribute("model.version", latest_version.version)
-
-                # Load model and mappings
-                self.model = mlflow.xgboost.load_model(latest_version.source)
-                self.category_mappings = mlflow.artifacts.load_dict(
-                    f"runs/{latest_version.run_id}/category_mappings.json"
+                # Get model version by alias instead of latest version
+                model_version = client.get_model_version_by_alias(
+                    self.model_name, "current"
                 )
+                span.set_attribute("model.version", model_version.version)
+                run_id = model_version.run_id
 
-                logger.info(f"Successfully loaded model {self.model_name}")
+                # Load model using the model URI
+                model_uri = f"models:/{self.model_name}@current"
+                self.model = mlflow.xgboost.load_model(model_uri)
+
+                # Load category mappings using the run ID
+                try:
+                    # Use mlflow.artifacts.load_dict with the correct artifact path
+                    self.category_mappings = mlflow.artifacts.load_dict(
+                        f"runs:/{run_id}/category_mappings.json"
+                    )
+                    logger.info(
+                        f"Successfully loaded model {self.model_name} and category mappings"
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to load category mappings: {str(e)}")
+                    raise
+
         except Exception as e:
             logger.error(f"Failed to load model: {str(e)}")
             raise
