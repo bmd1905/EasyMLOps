@@ -1,6 +1,6 @@
-# Easy Data Pipeline
+# EasyMLOps
 
-![Easy Data Pipeline Architecture](./docs/pipeline.png)
+![EasyMLOps Architecture](./docs/pipeline.png)
 
 ## Current Flows
 
