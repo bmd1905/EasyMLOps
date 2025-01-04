@@ -202,15 +202,8 @@ def data_pipeline():
         gold_data = gold_layer(transformed_data)
         quality_check_gold_data(gold_data)
 
-    # Add monitoring task
-    @task(trigger_rule="all_done")
-    def monitor_pipeline():
-        """Monitor pipeline execution and send metrics"""
-        # Add monitoring logic here
-        pass
-
     # Define dependencies
-    bronze_group >> silver_group >> gold_group >> monitor_pipeline()
+    bronze_group >> silver_group >> gold_group
 
 
 # Create DAG instance
