@@ -9,8 +9,8 @@ services:
       - MLFLOW_TRACKING_URI=http://tracking_server:5000
       - PYTHONPATH=/app
     networks:
-      - easydatapipeline_default
+      - easymlops_network
 
 networks:
-  easydatapipeline_default:
+  easymlops_network:
     external: true

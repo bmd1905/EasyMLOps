@@ -12,7 +12,7 @@ services:
       retries: 50
       start_period: 30s
     networks:
-      - easydatapipeline_default
+      - easymlops_network
 
   feature-retrieval:
     build:
@@ -31,8 +31,8 @@ services:
       - redis
 
     networks:
-      - easydatapipeline_default
+      - easymlops_network
 
 networks:
-  easydatapipeline_default:
+  easymlops_network:
     external: true

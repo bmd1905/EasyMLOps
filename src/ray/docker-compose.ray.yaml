@@ -30,7 +30,7 @@ services:
           cpus: "0.5"
           memory: "2g"
     networks:
-      - easydatapipeline_default
+      - easymlops_network
 
   ray-worker:
     build:
@@ -48,8 +48,8 @@ services:
           cpus: "4"
           memory: "4g"
     networks:
-      - easydatapipeline_default
+      - easymlops_network
 
 networks:
-  easydatapipeline_default:
+  easymlops_network:
     external: true

@@ -27,7 +27,7 @@ services:
       timeout: 5s
       retries: 3
     networks:
-      - easydatapipeline_default
+      - easymlops_network
 
   tracking_server:
     restart: always
@@ -61,11 +61,11 @@ services:
       timeout: 10s
       retries: 3
     networks:
-      - easydatapipeline_default
+      - easymlops_network
 
 volumes:
   db_data:
 
 networks:
-  easydatapipeline_default:
+  easymlops_network:
     external: true

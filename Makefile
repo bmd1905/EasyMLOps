@@ -18,7 +18,7 @@ PYTHON := python3
 
 # Docker Compose Commands
 up-network:
-	docker network create easydatapipeline_default
+	docker network create easymlops_network
 
 up-kafka:
 	docker compose -f $(KAFKA_COMPOSE_FILE) up -d --build
@@ -58,7 +58,7 @@ up-observability:
 	docker compose -f $(OBSERVABILITY_COMPOSE_FILE) up -d --build
 
 down-network:
-	docker network rm easydatapipeline_default
+	docker network rm easymlops_network
 
 down-kafka:
 	docker compose -f $(KAFKA_COMPOSE_FILE) down
