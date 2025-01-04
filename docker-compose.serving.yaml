@@ -1,7 +1,7 @@
 services:
   serving:
     build:
-      context: .
+      context: src/serving
       dockerfile: Dockerfile
     environment:
       - RAY_ADDRESS=ray://ray-head:10001

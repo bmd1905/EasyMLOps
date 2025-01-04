@@ -3,17 +3,17 @@
 
 # Configuration
 KAFKA_COMPOSE_FILE := docker-compose.kafka.yaml
-AIRFLOW_COMPOSE_FILE := src/orchestration/docker-compose.airflow.yaml
+ORCHESTRATION_COMPOSE_FILE := ./src/orchestration/docker-compose.orchestration.yaml
 DATA_LAKE_COMPOSE_FILE := docker-compose.data-lake.yaml
 DWH_COMPOSE_FILE := docker-compose.dwh.yaml
 ONLINE_STORE_COMPOSE_FILE := docker-compose.online-store.yaml
-RAY_COMPOSE_FILE := src/ray/docker-compose.ray.yaml
-MONITOR_COMPOSE_FILE := docker-compose.grafana.yaml
-MLFLOW_COMPOSE_FILE := docker-compose.mlflow.yaml
+RAY_COMPOSE_FILE := docker-compose.ray.yaml
+GRAFANA_COMPOSE_FILE := docker-compose.grafana.yaml
+MODEL_REGISTRY_COMPOSE_FILE := docker-compose.model-registry.yaml
 CDC_COMPOSE_FILE := docker-compose.cdc.yaml
-SERVING_COMPOSE_FILE := src/serving/docker-compose.serving.yaml
+SERVING_COMPOSE_FILE := docker-compose.serving.yaml
 NGINX_COMPOSE_FILE := docker-compose.nginx.yaml
-OBSERVABILITY_COMPOSE_FILE := ./src/observability/signoz/clickhouse-setup/docker-compose-minimal.yaml
+OBSERVABILITY_COMPOSE_FILE := docker-compose.observability.yaml
 PYTHON := python3
 
 # Docker Compose Commands
@@ -23,8 +23,8 @@ up-network:
 up-kafka:
 	docker compose -f $(KAFKA_COMPOSE_FILE) up -d --build
 
-up-airflow:
-	docker compose -f $(AIRFLOW_COMPOSE_FILE) up -d --build
+up-orchestration:
+	docker compose -f $(ORCHESTRATION_COMPOSE_FILE) up -d --build
 
 up-data-lake:
 	docker compose -f $(DATA_LAKE_COMPOSE_FILE) up -d --build
@@ -39,13 +39,13 @@ up-ray-cluster:
 	docker build -t raytest ./src/ray
 	docker compose -f $(RAY_COMPOSE_FILE) up -d --build
 
-up-monitor:
-	docker compose -f $(MONITOR_COMPOSE_FILE) up -d --build
+up-grafana:
+	docker compose -f $(GRAFANA_COMPOSE_FILE) up -d --build
 
-up-mlflow:
-	docker compose -f $(MLFLOW_COMPOSE_FILE) up -d --build
+up-model-registry:
+	docker compose -f $(MODEL_REGISTRY_COMPOSE_FILE) up -d --build
 
-up-cdc:
+up-cdc: up-kafka
 	docker compose -f $(CDC_COMPOSE_FILE) up -d --build
 
 up-serving:
@@ -63,8 +63,8 @@ down-network:
 down-kafka:
 	docker compose -f $(KAFKA_COMPOSE_FILE) down
 
-down-airflow:
-	docker compose -f $(AIRFLOW_COMPOSE_FILE) down
+down-orchestration:
+	docker compose -f $(ORCHESTRATION_COMPOSE_FILE) down
 
 down-data-lake:
 	docker compose -f $(DATA_LAKE_COMPOSE_FILE) down
@@ -78,11 +78,11 @@ down-online-store:
 down-ray-cluster:
 	docker compose -f $(RAY_COMPOSE_FILE) down -v
 
-down-monitor:
-	docker compose -f $(MONITOR_COMPOSE_FILE) down -v
+down-grafana:
+	docker compose -f $(GRAFANA_COMPOSE_FILE) down -v
 
-down-mlflow:
-	docker compose -f $(MLFLOW_COMPOSE_FILE) down -v
+down-model-registry:
+	docker compose -f $(MODEL_REGISTRY_COMPOSE_FILE) down -v
 
 down-cdc:
 	docker compose -f $(CDC_COMPOSE_FILE) down -v
@@ -97,13 +97,13 @@ down-observability:
 	docker compose -f $(OBSERVABILITY_COMPOSE_FILE) down -v
 
 restart-kafka: down-kafka up-kafka
-restart-airflow: down-airflow up-airflow
+restart-orchestration: down-orchestration up-orchestration
 restart-data-lake: down-data-lake up-data-lake
 restart-dwh: down-dwh up-dwh
 restart-online-store: down-online-store up-online-store
 restart-ray-cluster: down-ray-cluster up-ray-cluster
-restart-monitor: down-monitor up-monitor
-restart-mlflow: down-mlflow up-mlflow
+restart-grafana: down-grafana up-grafana
+restart-model-registry: down-model-registry up-model-registry
 restart-cdc: down-cdc up-cdc
 restart-serving: down-serving up-serving
 restart-nginx: down-nginx up-nginx
@@ -113,8 +113,8 @@ restart-observability: down-observability up-observability
 logs-kafka:
 	docker compose -f $(KAFKA_COMPOSE_FILE) logs -f
 
-logs-airflow:
-	docker compose -f $(AIRFLOW_COMPOSE_FILE) logs -f
+logs-orchestration:
+	docker compose -f $(ORCHESTRATION_COMPOSE_FILE) logs -f
 
 logs-data-lake:
 	docker compose -f $(DATA_LAKE_COMPOSE_FILE) logs -f
@@ -128,11 +128,11 @@ logs-online-store:
 logs-ray-cluster:
 	docker compose -f $(RAY_COMPOSE_FILE) logs -f
 
-logs-monitor:
-	docker compose -f $(MONITOR_COMPOSE_FILE) logs -f
+logs-grafana:
+	docker compose -f $(GRAFANA_COMPOSE_FILE) logs -f
 
-logs-mlflow:
-	docker compose -f $(MLFLOW_COMPOSE_FILE) logs -f
+logs-model-registry:
+	docker compose -f $(MODEL_REGISTRY_COMPOSE_FILE) logs -f
 
 logs-cdc:
 	docker compose -f $(CDC_COMPOSE_FILE) logs -f
@@ -148,13 +148,13 @@ logs-observability:
 
 clean:
 	docker compose -f $(KAFKA_COMPOSE_FILE) down -v
-	docker compose -f $(AIRFLOW_COMPOSE_FILE) down -v
+	docker compose -f $(ORCHESTRATION_COMPOSE_FILE) down -v
 	docker compose -f $(DATA_LAKE_COMPOSE_FILE) down -v
 	docker compose -f $(DWH_COMPOSE_FILE) down -v
 	docker compose -f $(ONLINE_STORE_COMPOSE_FILE) down -v
 	docker compose -f $(RAY_COMPOSE_FILE) down -v
-	docker compose -f $(MONITOR_COMPOSE_FILE) down -v
-	docker compose -f $(MLFLOW_COMPOSE_FILE) down -v
+	docker compose -f $(GRAFANA_COMPOSE_FILE) down -v
+	docker compose -f $(MODEL_REGISTRY_COMPOSE_FILE) down -v
 	docker compose -f $(CDC_COMPOSE_FILE) down -v
 	docker compose -f $(SERVING_COMPOSE_FILE) down -v
 	docker compose -f $(NGINX_COMPOSE_FILE) down -v
@@ -198,14 +198,6 @@ deploy_s3_connector:
 
 alert_invalid_events:
 	uv run $(PYTHON) -m src.streaming.main alert_invalid_events
-
-# ------------- CDC Commands
-cdc_setup:
-	uv run bash src/cdc/run.sh register_connector src/cdc/configs/postgresql-cdc.json
-
-insert_cdc_data:
-	uv run $(PYTHON) -m src.cdc.create_table
-	uv run $(PYTHON) -m src.cdc.insert_data
 
 # ------------- Online Store Commands
 ingest_stream_to_online_store:

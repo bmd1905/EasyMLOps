@@ -1,7 +1,7 @@
 services:
   ray-head:
     build:
-      context: .
+      context: src/ray
       dockerfile: Dockerfile
     user: root
     ports:
@@ -34,7 +34,7 @@ services:
 
   ray-worker:
     build:
-      context: ./src/ray
+      context: src/ray
       dockerfile: Dockerfile
     depends_on:
       - ray-head
