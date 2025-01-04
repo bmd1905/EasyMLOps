@@ -32,7 +32,7 @@ services:
   tracking_server:
     restart: always
     build:
-      context: ./src/mlflow
+      context: ./src/model_registry
       dockerfile: Dockerfile
     image: mlflow_server
     container_name: mlflow_server
