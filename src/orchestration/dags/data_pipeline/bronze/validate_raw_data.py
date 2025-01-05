@@ -113,7 +113,7 @@ def flatten_record(record: Dict[str, Any]) -> Dict[str, Any]:
         return record
 
 
-@task()
+@task(task_id="quality_check_raw_data")
 def validate_raw_data(raw_data: Dict[str, Any]) -> Dict[str, Any]:
     """Validate raw data using both Great Expectations and custom validation"""
     try:

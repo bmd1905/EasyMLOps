@@ -140,6 +140,16 @@ def transform_data(validated_data: Dict[str, Any]) -> Dict[str, Any]:
     try:
         # Convert to DataFrame and log initial state
         df = pd.DataFrame(validated_data["data"])
+
+        if len(df) == 0:
+            logger.warning("No data to transform")
+            return {
+                "data": [],
+                "success": False,
+                "message": "No data to transform",
+                "skipp_downstream": True,
+            }
+
         logger.debug(f"Initial DataFrame columns: {df.columns.tolist()}")
         logger.debug(f"DataFrame shape: {df.shape}")
 

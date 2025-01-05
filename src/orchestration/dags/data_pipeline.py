@@ -105,8 +105,9 @@ def silver_layer(validated_data: Dict[str, Any]) -> Dict[str, Any]:
 
     # Transform data
     transformed_data = transform_data(validated_data)
-    if transformed_data is None:
-        logger.error("Data transformation failed.")
+
+    if transformed_data["skip"] is False:
+        logger.warning(transformed_data["message"])
         return {"data": [], "metrics": {"transformed_records": 0}}
 
     return transformed_data
