@@ -23,7 +23,7 @@ up-network:
 up-kafka:
 	docker compose -f $(KAFKA_COMPOSE_FILE) up -d --build
 
-up-cdc: up-kafka consumer
+up-cdc: up-kafka
 	docker compose -f $(CDC_COMPOSE_FILE) up -d --build
 
 up-data-lake:
@@ -192,7 +192,7 @@ start-feature-service:
 producer:
 	uv run $(PYTHON) src/producer/produce.py -b=localhost:9092 -s=http://localhost:8081
 
-consumer:
+schema_validation:
 	uv run $(PYTHON) -m src.streaming.main schema_validation
 
 validated_events_to_features:
