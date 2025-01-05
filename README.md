@@ -1,55 +1,104 @@
 # EasyMLOps
 
+A turnkey MLOps pipeline demonstrating how to go from raw events to real-time predictions at scale. This project leverages modern data engineering and ML platforms—including Kafka, Flink, Redis, Ray, and more—to provide an end-to-end solution for data ingestion, validation, training, serving, and observability.
+
+## Architecture Overview
+
 ![EasyMLOps Architecture](./docs/pipeline.png)
 
-## Current Flows
+The system is composed of four main pipelines—Data, Training, Serving, and Observability—along with a Dev Environment and a Model Registry.
 
-### Data Pipeline
+---
 
-- `Producers` act as sources of raw events and produce data to the Kafka `Raw Events Topic`.
+### 1. Data Pipeline
 
-- A `Validation Service` (Flink job) consumes data from the `Raw Events Topic`, validates schema, and publishes to either:
+1. **Producers**
+   Multiple producers emit raw events to the **Kafka `Raw Events Topic`**.
 
-  - The `Validated Topic` for valid data
-  - The `Invalidated Topic` for invalid data
+2. **Validation Service**
+   A Flink job consumes raw events, validates their schema, and routes them accordingly:
 
-- The `Validated Topic` is synchronized with:
+   - **`Validated Topic`** for valid data
+   - **`Invalidated Topic`** for invalid data
 
-  - The `DataLake` (MinIO) for persistent storage and further processing
-  - The `Online Store` (Redis) for real-time feature serving
+3. **DataLake and Online Store**
 
-- The Data Warehouse (Offline Store) processing workflow is orchestrated by `Airflow DAGs`:
-  - Ingest raw data from the DataLake
-  - Quality check raw data
-  - Transform data
-  - Create dimension, fact, and feature tables
-  - Quality check gold data
+   - **Validated Topic → DataLake (MinIO)**
+     For permanent storage and downstream batch processing.
+   - **Validated Topic → Online Store (Redis)**
+     For real-time feature retrieval.
 
-### Training Pipeline
+4. **Data Warehouse (Offline Store)**
+   Orchestrated by **Airflow DAGs**, which:
+   - Ingest raw data from the DataLake
+   - Perform quality checks and transformations
+   - Create dimension, fact, and feature tables
+   - Re-check data quality on the final “gold” tables
 
-- The `Ray Train` and `Ray Tune` framework handles distributed model training:
+---
 
-  - get_data: Pulls features from the Data Warehouse
-  - hyper_parameter_tuning: Hyperparameter tuning
-  - train_final_model: Train the final model with the best hyperparameters
-  - the weights and metrics are stored in the Model Registry (MLflow and MinIO)
+### 2. Training Pipeline
 
-- Beside the automatic training pipeline, we also have a manual training pipeline in `notebook/train.ipynb`
+1. **Distributed Training with Ray**
 
-### Serving Pipeline
+   - `get_data`: Pulls features from the Data Warehouse
+   - `hyper_parameter_tuning`: Conducts hyperparameter tuning using Ray Tune
+   - `train_final_model`: Trains the final model with the best hyperparameters
 
-- The `XGBoost` model is served by `RayServe`:
-  - Loads model checkpoints from Model Registry
-  - Pulls real-time features from the Online Store (Redis)
-  - Serves predictions to the Product App
+2. **Model Registry**
 
-### Observability
+   - **MLflow and MinIO** store model weights, metrics, and artifacts.
 
-- OpenTelemetry Collector gathers telemetry data from the serving pipeline
-- SigNoz serves as the backend for the observability platform
-  - Collects metrics, traces, and logs exported from OpenTelemetry
-  - Provides visibility into system performance and health
+3. **Manual Training Option**
+   - Jupyter notebooks (`notebook/train.ipynb`) allow a custom or ad hoc workflow.
+
+---
+
+### 3. Serving Pipeline
+
+1. **Real-Time Inference**
+
+   - **Ray Serve** hosts an **XGBoost** model.
+   - Model checkpoints are loaded from the **Model Registry**.
+   - Real-time feature retrieval comes from **Redis**.
+   - Predictions are served to the **Product App** via **NGINX**.
+
+2. **Scalability & Performance**
+   - Ray Serve scales horizontally to handle high-throughput requests.
+   - NGINX acts as a reverse proxy to route traffic efficiently.
+
+---
+
+### 4. Observability
+
+1. **OpenTelemetry Collector**
+   Aggregates telemetry data (metrics, traces, logs) from the Serving Pipeline.
+
+2. **SigNoz**
+   - Receives data exported from the OpenTelemetry Collector.
+   - Provides a centralized dashboard for system health and performance monitoring.
+
+---
+
+### Dev Environment
+
+- **Jupyter Notebooks** for data exploration, ad hoc experimentation, and manual model development.
+- Integration with the rest of the pipeline (Data, Training, Serving) ensures an end-to-end experience even in development.
+
+---
 
 ## Usage
 
-Check the `Makefile` for all the commands you can use.
+All available commands can be found in the `Makefile`.
+
+---
+
+## Contributing
+
+Contributions are welcome! Feel free to open issues or submit pull requests to improve the Data Pipeline, Training Pipeline, Serving Pipeline, or Observability stack.
+
+---
+
+## License
+
+This project is provided under an open-source license. See the [LICENSE](LICENSE) file for details.
