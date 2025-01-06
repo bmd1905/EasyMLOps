@@ -126,9 +126,9 @@ make up-network
 make up-kafka
 ```
 
-The last service in the `docker-compose.kafka.yaml` file is `kafka_producer`, this service acts as a producer and will start sending messages to the `raw-events-topic`.
+The last service in the `docker-compose.kafka.yaml` file is `kafka_producer`, this service acts as a producer and will start sending messages to the `tracking.raw_user_behavior`.
 
-To check if all services are running, you can go to the `http://localhost:9021/` and you should see the Kafka dashboard. Then go to the `Topics` tab and you should see the `raw-events-topic`.
+To check if all services are running, you can go to the `http://localhost:9021/` and you should see the Kafka dashboard. Then go to the `Topics` tab and you should see the `tracking.raw_user_behavior`.
 
 #### Start CDC
 
@@ -146,7 +146,7 @@ Go back to the `http://localhost:9021/` and you should see a new topic called `c
 make schema_validation
 ```
 
-This is a Flink job that will consume the `cdc_.public.events` and `raw-events-topic` topics and validate the schema of the events. The validated events will be sent to the `validated-events-topic` and the invalid events will be sent to the `invalidated-events-topic`. For easier to understand, I don't push these flink jobs into a docker compose file, but you can do it if you want. Watch the terminal to see the job running.
+This is a Flink job that will consume the `cdc_.public.events` and `tracking.raw_user_behavior` topics and validate the schema of the events. The validated events will be sent to the `validated-events-topic` and the invalid events will be sent to the `invalidated-events-topic`. For easier to understand, I don't push these flink jobs into a docker compose file, but you can do it if you want. Watch the terminal to see the job running.
 
 ### Start Data Lake
 

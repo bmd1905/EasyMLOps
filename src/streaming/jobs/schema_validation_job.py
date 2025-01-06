@@ -230,9 +230,9 @@ def validate_schema(record: str) -> str:
 class SchemaValidationJob(FlinkJob):
     def __init__(self):
         self.jars_path = f"{os.getcwd()}/src/streaming/connectors/config/jars/"
-        self.input_topics = os.getenv("KAFKA_INPUT_TOPICS", "raw-events-topic").split(
-            ","
-        )
+        self.input_topics = os.getenv(
+            "KAFKA_INPUT_TOPICS", "tracking.raw_user_behavior"
+        ).split(",")
         self.group_id = os.getenv("KAFKA_GROUP_ID", "flink-group")
         self.valid_topic = os.getenv("KAFKA_VALID_TOPIC", "validated-events-topic")
         self.invalid_topic = os.getenv(

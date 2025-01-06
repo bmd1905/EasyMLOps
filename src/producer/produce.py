@@ -11,7 +11,7 @@ from schema_registry.client import SchemaRegistryClient, schema
 
 load_dotenv()
 
-OUTPUT_TOPICS = os.getenv("KAFKA_OUTPUT_TOPICS", "raw-events-topic")
+OUTPUT_TOPICS = os.getenv("KAFKA_OUTPUT_TOPICS", "tracking.raw_user_behavior")
 BOOTSTRAP_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "broker:9092")
 SCHEMA_REGISTRY_SERVER = os.getenv(
     "KAFKA_SCHEMA_REGISTRY_URL", "http://schema-registry:8081"

@@ -35,7 +35,7 @@ class DataPipelineConfig:
                 "SCHEMA_REGISTRY_URL", default_var="http://schema-registry:8081"
             ),
             schema_subject=Variable.get(
-                "SCHEMA_SUBJECT", default_var="raw-events-topic-schema"
+                "SCHEMA_SUBJECT", default_var="user_behavior_raw_schema_v1"
             ),
             batch_size=int(Variable.get("BATCH_SIZE", default_var="1000")),
         )
