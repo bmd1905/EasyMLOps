@@ -169,7 +169,7 @@ The system comprises four main pipelines—**Data**, **Training**, **Serving**, 
 
 #### 🖥️ a. MLflow UI
 
-- Access at `http://localhost:5001`.
+- Access at `localhost:5001`.
 - Stores experiment runs, parameters, metrics, and artifacts.
 
 #### 📁 b. MinIO
@@ -270,7 +270,7 @@ make up-kafka
 
 The last service in the `docker-compose.kafka.yaml` file is `kafka_producer`, this service acts as a producer and will start sending messages to the `tracking.raw_user_behavior` topic.
 
-To check if Kafka is running, you can go to `http://localhost:9021/` and you should see the Kafka dashboard. Then go to the `Topics` tab and you should see `tracking.raw_user_behavior` topic.
+To check if Kafka is running, you can go to `localhost:9021` and you should see the Kafka dashboard. Then go to the `Topics` tab and you should see `tracking.raw_user_behavior` topic.
 
 ![Kafka Topics](./docs/images/kafka-topic.jpg)
 
@@ -355,7 +355,7 @@ The data automatically syncs from PostgreSQL to the `tracking_postgres_cdc.publi
 
 ![Kafka Connectors](./docs/images/kafka-connectors.jpg)
 
-Return to `http://localhost:9021/`; there should be a new topic called `tracking_postgres_cdc.public.events`.
+Return to `localhost:9021`; there should be a new topic called `tracking_postgres_cdc.public.events`.
 
 ![Kafka Topics](./docs/images/kafka-topic-cdc.jpg)
 
@@ -371,7 +371,7 @@ This is a Flink job that will consume the `tracking_postgres_cdc.public.events` 
 
 We can handle `10k RPS`, noting that approximately `10%` of events are failures. I purposely make the producer send invalid events to the `tracking.user_behavior.invalid` topic. You can check this at line `127` in `src/producer/produce.py`.
 
-After starting the job, you can go to `http://localhost:9021/` and you should see the `tracking.user_behavior.validated` and `tracking.user_behavior.invalid` topics.
+After starting the job, you can go to `localhost:9021` and you should see the `tracking.user_behavior.validated` and `tracking.user_behavior.invalid` topics.
 
 ![Kafka Topics](./docs/images/kafka-topic-schema-validation.jpg)
 
@@ -389,9 +389,9 @@ In order to sync the data from the `tracking.user_behavior.validated` and `track
 make deploy_s3_connector
 ```
 
-Go to `http://localhost:9021/` (default user and password is `minioadmin:minioadmin`) at the `Connect` tab and you should see new connectors called `minio-validated-sink` and `minio-invalidated-sink`.
+Go to `localhost:9021` (default user and password is `minioadmin:minioadmin`) at the `Connect` tab and you should see new connectors called `minio-validated-sink` and `minio-invalidated-sink`.
 
-To see the MinIO UI, you can go to `http://localhost:9001/`. There are 2 buckets, `validated-events-bucket` and `invalidated-events-bucket`, you can go to each bucket and you should see the events being synced.
+To see the MinIO UI, you can go to `localhost:9001`. There are 2 buckets, `validated-events-bucket` and `invalidated-events-bucket`, you can go to each bucket and you should see the events being synced.
 
 ![MinIO Buckets](./docs/images/minio-buckets.jpg)
 
@@ -415,11 +415,11 @@ This will start the Airflow service and the other services that are needed for t
 
 **Relevant URLs:**
 
-- MinIO UI: `http://localhost:9001/` 🖥️
-- Airflow UI: `http://localhost:8080/` (user/password: `airflow:airflow`) 🔗
-- Ray Dashboard: `http://localhost:8265/` 📊
-- Grafana: `http://localhost:3009/` 📉
-- MLflow UI: `http://localhost:5001/` 🖥️
+- MinIO UI: `localhost:9001` 🖥️
+- Airflow UI: `localhost:8080` (user/password: `airflow:airflow`) 🔗
+- Ray Dashboard: `localhost:8265` 📊
+- Grafana: `localhost:3009` 📉
+- MLflow UI: `localhost:5001` 🖥️
 
 ### Data and Training Pipeline
 
@@ -471,7 +471,7 @@ Trigger the `training_pipeline` DAG, and you should see the tasks running. This 
 
 After hitting the `Trigger DAG` button, you should see the tasks running. The `tune_hyperparameters` task will be `deferred` because it will submit the Ray Tune job to the Ray Cluster and use polling to check if the job is done. The same happens with the `train_final_model` task.
 
-When the `tune_hyperparameters` or `train_final_model` tasks are running, you can go to the Ray Dashboard at `http://localhost:8265` and you should see the tasks running.
+When the `tune_hyperparameters` or `train_final_model` tasks are running, you can go to the Ray Dashboard at `localhost:8265` and you should see the tasks running.
 
 ![Ray Dashboard](./docs/images/ray-dashboard.jpg)
 
@@ -479,11 +479,11 @@ Click on the task and you should see the task details, including the id, status,
 
 ![Ray Task Details](./docs/images/ray-task-details.jpg)
 
-To see the results of the training, you can go to the MLflow UI at `http://localhost:5001` and you should see the training results.
+To see the results of the training, you can go to the MLflow UI at `localhost:5001` and you should see the training results.
 
 ![MLflow UI](./docs/images/mlflow-ui.jpg)
 
-The model will be versioned in the Model Registry, you can go to `http://localhost:5001/` and hit the `Models` tab and you should see the model.
+The model will be versioned in the Model Registry, you can go to `localhost:5001` and hit the `Models` tab and you should see the model.
 
 ![MLflow Models](./docs/images/mlflow-models.jpg)
 
@@ -505,7 +505,7 @@ python materialize_features.py # Materialize the features from Data Warehouse to
 python api.py # Start a simple FastAPI app to retrieve the features
 ```
 
-To view the Swagger UI, you can go to `http://localhost:8001/docs`.
+To view the Swagger UI, you can go to `localhost:8001/docs`.
 
 The `redis` service is a Redis instance that will store the features.
 
@@ -565,7 +565,7 @@ This command will start the Serving Pipeline. Note that we did not port forward 
 make up-observability
 ```
 
-This command will start the Observability Pipeline. This is a SigNoz instance that will receive the data from the OpenTelemetry Collector. Go to `http://localhost:3301/` and you should see the SigNoz dashboard.
+This command will start the Observability Pipeline. This is a SigNoz instance that will receive the data from the OpenTelemetry Collector. Go to `localhost:3301` and you should see the SigNoz dashboard.
 
 ![Observability](./docs/images/signoz-1.jpg)
 
@@ -573,7 +573,7 @@ This command will start the Observability Pipeline. This is a SigNoz instance th
 
 #### 📉 Prometheus and Grafana
 
-To see the Ray Cluster information, you can go to `http://localhost:3009/` and you should see the Grafana dashboard.
+To see the Ray Cluster information, you can go to `localhost:3009` and you should see the Grafana dashboard.
 
 ![Grafana](./docs/images/grafana.jpg)
 
@@ -583,7 +583,7 @@ To see the Ray Cluster information, you can go to `http://localhost:3009/` and y
 make up-nginx
 ```
 
-This command will start the NGINX Proxy Manager, you can go to `http://localhost:81/` and you should see the NGINX Proxy Manager UI. The default user and password is `admin@example.com:changeme`. Then you can setup the reverse proxy for the Ray Dashboard, MLflow, Airflow, and more. For SSL, you can use Let's Encrypt, and for domain, you can use DuckDNS.
+This command will start the NGINX Proxy Manager, you can go to `localhost:81` and you should see the NGINX Proxy Manager UI. The default user and password is `admin@example.com:changeme`. Then you can setup the reverse proxy for the Ray Dashboard, MLflow, Airflow, and more. For SSL, you can use Let's Encrypt, and for domain, you can use DuckDNS.
 
 ![NGINX Proxy Manager 1](./docs/images/nginx-proxy-manager-1.jpg)
 
