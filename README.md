@@ -1,10 +1,58 @@
-# EasyMLOps (WIP)
+# 🚀 EasyMLOps
 
 A turnkey MLOps pipeline demonstrating how to go from raw events to real-time predictions at scale. This project leverages modern data engineering and ML platforms—including Kafka, Flink, Redis, Ray, and more—to provide an end-to-end solution for data ingestion, validation, training, serving, and observability.
 
-## 🌐 Architecture Overview
-
 ![EasyMLOps Architecture](./docs/pipeline.png)
+
+## 📑 Table of Contents
+
+- [🌐 Architecture Overview](#-architecture-overview)
+  - [1. Data Pipeline](#1-data-pipeline)
+    - [📤 a. Producers & CDC](#a-producers--cdc)
+    - [✅ b. Validation Service (Flink)](#b-validation-service-flink)
+    - [☁️ c. DataLake (MinIO)](#c-datalake-minio)
+    - [🏢 d. Data Warehouse (PostgreSQL)](#d-data-warehouse-postgresql)
+    - [🛒 e. Online Store (Redis)](#e-online-store-redis)
+  - [2. Training Pipeline](#2-training-pipeline)
+    - [🌟 a. Distributed Training with Ray](#a-distributed-training-with-ray)
+    - [📦 b. Model Registry](#b-model-registry)
+    - [📝 c. Manual Training Option](#c-manual-training-option)
+  - [3. Serving Pipeline](#3-serving-pipeline)
+    - [⚡ a. Real-Time Inference (Ray Serve)](#a-real-time-inference-ray-serve)
+    - [🔍 b. Feature Retrieval Services](#b-feature-retrieval-services)
+    - [📈 c. Scalability & Performance](#c-scalability--performance)
+  - [4. Observability](#4-observability)
+    - [📡 a. OpenTelemetry Collector](#a-opentelemetry-collector)
+    - [📊 b. SigNoz](#b-signoz)
+    - [📉 c. Prometheus & Grafana](#c-prometheus--grafana)
+  - [🛠️ Dev Environment](#dev-environment-🛠️)
+    - [📓 a. Jupyter Notebooks](#a-jupyter-notebooks-📓)
+    - [🐳 b. Docker Compose Services](#b-docker-compose-services-🐳)
+  - [Model Registry](#model-registry)
+    - [🖥️ a. MLflow UI](#a-mlflow-ui-🖥️)
+    - [📁 b. MinIO](#b-minio-📁)
+- [📊 Sequence Diagrams](#-sequence-diagrams)
+  - [Sequence Diagram for Data Flow and Validation](#sequence-diagram-for-data-flow-and-validation)
+  - [Sequence Diagram for Model Training and Serving](#sequence-diagram-for-model-training-and-serving)
+- [⚙️ Usage](#-usage)
+- [📖 Details](#-details)
+  - [🔧 Setup Environment Variables](#setup-environment-variables-🔧)
+  - [🏁 Start Data Pipeline](#start-data-pipeline-🏁)
+  - [✅ Start Schema Validation Job](#start-schema-validation-job-✅)
+  - [☁️ Start Data Lake](#start-data-lake-☁️)
+  - [🔄 Start Orchestration](#start-orchestration-🔄)
+  - [Data and Training Pipeline](#data-and-training-pipeline)
+    - [🔄 Data Pipeline](#-data-pipeline-🔄)
+    - [🤼‍♂️ Training Pipeline](#-training-pipeline-🤼‍♂️)
+    - [📦 Start Online Store](#-start-online-store-📦)
+  - [🚀 Start Serving Pipeline](#-start-serving-pipeline-🚀)
+  - [🔎 Start Observability](#-start-observability-🔎)
+    - [📈 Signoz](#signoz-📈)
+    - [📉 Prometheus and Grafana](#prometheus-and-grafana-📉)
+  - [🔒 NGINX](#nginx-🔒)
+- [📃 License](#-license)
+
+## 🌐 Architecture Overview
 
 The system comprises four main pipelines—**Data**, **Training**, **Serving**, and **Observability**—alongside a **Dev Environment** and a **Model Registry**.
 
@@ -12,25 +60,25 @@ The system comprises four main pipelines—**Data**, **Training**, **Serving**, 
 
 ### 1. Data Pipeline
 
-#### a. Producers & CDC
+#### 📤 a. Producers & CDC
 
 - Multiple producers emit raw events to **Kafka** (`tracking.raw_user_behavior`).
 - A **Debezium-based CDC** service captures and streams changes from PostgreSQL into **Kafka** (`tracking_postgres_cdc.public.events`).
 
-#### b. Validation Service (Flink)
+#### ✅ b. Validation Service (Flink)
 
 - Consumes raw and CDC events from Kafka.
 - Validates schemas, splitting events into:
   - **Validated Topic** (`tracking.user_behavior.validated`)
   - **Invalidated Topic** (`tracking.user_behavior.invalid`)
 
-#### c. DataLake (MinIO)
+#### ☁️ c. DataLake (MinIO)
 
 - **Kafka → S3 Sink Connectors** write validated and invalid data to **MinIO**.
 - No data is lost—this approach follows `EtLT` (Extract, transform, Load, Transform).
 - Ensures permanent storage of both raw and invalid events for alerting or recovery.
 
-#### d. Data Warehouse (PostgreSQL)
+#### 🏢 d. Data Warehouse (PostgreSQL)
 
 - **Airflow DAGs** orchestrate the ETL flow (Bronze → Silver → Gold tables):
   - Ingest raw data from MinIO.
@@ -38,7 +86,7 @@ The system comprises four main pipelines—**Data**, **Training**, **Serving**, 
   - Create dimension, fact, and feature tables.
   - Re-check data quality on final “gold” tables.
 
-#### e. Online Store (Redis)
+#### 🛒 e. Online Store (Redis)
 
 - Real-time ingestion of features:
   - **Flink Jobs** or custom Python scripts convert validated events into feature-ready topics.
@@ -48,18 +96,18 @@ The system comprises four main pipelines—**Data**, **Training**, **Serving**, 
 
 ### 2. Training Pipeline
 
-#### a. Distributed Training with Ray
+#### 🌟 a. Distributed Training with Ray
 
 - **`load_training_data`**: Pulls features from the “gold” tables in the Data Warehouse.
 - **`tune_hyperparameters`**: Uses **Ray Tune** for distributed hyperparameter optimization.
 - **`train_final_model`**: Trains the final model (e.g., XGBoost) using the best hyperparameters.
 
-#### b. Model Registry
+#### 📦 b. Model Registry
 
 - **MLflow + MinIO** to store model artifacts, metrics, and versioned checkpoints.
 - Facilitates model discovery, lineage, and rollout/rollback.
 
-#### c. Manual Training Option
+#### 📝 c. Manual Training Option
 
 - **Jupyter notebooks** (`notebook/train.ipynb`) provide custom or ad hoc workflows.
 
@@ -67,18 +115,18 @@ The system comprises four main pipelines—**Data**, **Training**, **Serving**, 
 
 ### 3. Serving Pipeline
 
-#### a. Real-Time Inference (Ray Serve)
+#### ⚡ a. Real-Time Inference (Ray Serve)
 
 - **Ray Serve** hosts the trained model.
 - Model checkpoints loaded from **MLflow** in MinIO.
 - Real-time features fetched from **Redis** (Online Store).
 
-#### b. Feature Retrieval Services
+#### 🔍 b. Feature Retrieval Services
 
 - A dedicated microservice (e.g., **FastAPI**) or Flink job for on-demand feature retrieval.
 - Streams or scheduled updates keep **Redis** current.
 
-#### c. Scalability & Performance
+#### 📈 c. Scalability & Performance
 
 - **Ray Serve** scales horizontally under heavy workloads.
 - **NGINX** acts as a reverse proxy, routing requests efficiently.
@@ -87,30 +135,30 @@ The system comprises four main pipelines—**Data**, **Training**, **Serving**, 
 
 ### 4. Observability
 
-#### a. OpenTelemetry Collector
+#### 📡 a. OpenTelemetry Collector
 
 - Collects, aggregates, and exports metrics, logs, and traces from various services.
 
-#### b. SigNoz
+#### 📊 b. SigNoz
 
 - Consumes telemetry data from the OpenTelemetry Collector.
 - Offers dashboards and alerting for monitoring the entire pipeline.
 
-#### c. Prometheus & Grafana
+#### 📉 c. Prometheus & Grafana
 
 - Scrapes and visualizes **Ray Cluster** metrics.
 - Provides insights into resource usage, job status, and cluster health.
 
 ---
 
-### Dev Environment
+### 🛠️ Dev Environment
 
-#### a. Jupyter Notebooks
+#### 📓 a. Jupyter Notebooks
 
 - Facilitates data exploration, rapid prototyping, and debugging.
 - Integrated with the rest of the pipeline for end-to-end local development.
 
-#### b. Docker Compose Services
+#### 🐳 b. Docker Compose Services
 
 - Local spins of **Kafka**, **Flink**, **Redis**, **Airflow**, etc.
 - Simplifies debugging and testing by emulating production environments.
@@ -119,12 +167,12 @@ The system comprises four main pipelines—**Data**, **Training**, **Serving**, 
 
 ### Model Registry
 
-#### a. MLflow UI
+#### 🖥️ a. MLflow UI
 
 - Access at `http://localhost:5001`.
 - Stores experiment runs, parameters, metrics, and artifacts.
 
-#### b. MinIO
+#### 📁 b. MinIO
 
 - Serves as the artifact storage backend for MLflow.
 - Manages versioned model binaries and other metadata.
@@ -132,6 +180,52 @@ The system comprises four main pipelines—**Data**, **Training**, **Serving**, 
 ---
 
 By combining streaming ingestion (**Kafka** + **Flink**), persistent storage (**MinIO** + **PostgreSQL**), orchestration (**Airflow**), distributed training/serving (**Ray**), and observability (**SigNoz**, **Prometheus/Grafana**), **EasyMLOps** provides a robust, modular pipeline—from raw data to real-time predictions at scale.
+
+---
+
+## 📊 Sequence Diagrams
+
+### Sequence Diagram for Data Flow and Validation
+
+```mermaid
+sequenceDiagram
+    participant P as Producers
+    participant CDC as CDC Service
+    participant K as Kafka
+    participant V as Validation Service
+    participant DL as Data Lake
+    participant DW as Data Warehouse
+    participant OS as Online Store
+
+    P->>K: Send raw events
+    CDC->>K: Stream DB changes
+    K->>V: Forward events
+    V->>K: Write validated data
+    V->>K: Write invalid data
+    K->>DL: Store validated/invalid data
+    DL->>DW: ETL process
+    K->>OS: Stream validated features
+```
+
+### Sequence Diagram for Model Training and Serving
+
+```mermaid
+sequenceDiagram
+    participant DW as Data Warehouse
+    participant RT as Ray Training
+    participant MR as Model Registry
+    participant RS as Ray Serve
+    participant OS as Online Store
+    participant API as API
+
+    DW->>RT: Load training data
+    RT->>RT: Tune hyperparameters
+    RT->>RT: Train model
+    RT->>MR: Save model
+    MR->>RS: Load model
+    OS->>RS: Provide features
+    RS->>API: Serve predictions
+```
 
 ---
 
@@ -145,7 +239,7 @@ All available commands can be found in the `Makefile`.
 
 In this section, we will dive into the details of the system.
 
-### Setup environment variables
+### 🔧 Setup Environment Variables
 
 Please run the following command to setup the `.env` files:
 
@@ -158,9 +252,9 @@ cp ./src/producer/.env.example ./src/producer/.env
 cp ./src/streaming/.env.example ./src/streaming/.env
 ```
 
-Note: I don't use any secrets in this project, so run the above command and you are good to go.
+**Note**: I don't use any secrets in this project, so run the above command and you are good to go.
 
-### Start Data Pipeline
+### 🏁 Start Data Pipeline
 
 I will use the same network for all the services, first we need to create the network.
 
@@ -168,7 +262,7 @@ I will use the same network for all the services, first we need to create the ne
 make up-network
 ```
 
-#### Start Kafka
+#### 🐟 Start Kafka
 
 ```bash
 make up-kafka
@@ -245,7 +339,7 @@ Here is an example of the message's value in the `tracking.raw_user_behavior` to
 }
 ```
 
-#### Start CDC
+#### 🔄 Start CDC
 
 ```bash
 make up-cdc
@@ -265,13 +359,13 @@ Return to `http://localhost:9021/`; there should be a new topic called `tracking
 
 ![Kafka Topics](./docs/images/kafka-topic-cdc.jpg)
 
-### Start Schema Validation Job
+### ✅ Start Schema Validation Job
 
 ```bash
 make schema_validation
 ```
 
-This is a Flink job that will consume the `tracking_postgres_cdc.public.events` and `tracking.raw_user_behavior` topics and validate the schema of the events. The validated events will be sent to the `tracking.user_behavior.validated` topic and the invalid events will be sent to the `tracking.user_behavior.invalid` topic, respectively. For easier to understand, I don't push these flink jobs into a docker compose file, but you can do it if you want. Watch the terminal to see the job running, the log may look like this:
+This is a Flink job that will consume the `tracking_postgres_cdc.public.events` and `tracking.raw_user_behavior` topics and validate the schema of the events. The validated events will be sent to the `tracking.user_behavior.validated` topic and the invalid events will be sent to the `tracking.user_behavior.invalid` topic, respectively. For easier understanding, I don't push these Flink jobs into a Docker Compose file, but you can do it if you want. Watch the terminal to see the job running, the log may look like this:
 
 ![Schema Validation Job](./docs/images/schema-validation-job-log.jpg)
 
@@ -279,7 +373,7 @@ After starting the job, you can go to `http://localhost:9021/` and you should se
 
 ![Kafka Topics](./docs/images/kafka-topic-schema-validation.jpg)
 
-### Start Data Lake
+### ☁️ Start Data Lake
 
 ```bash
 make up-data-lake
@@ -293,7 +387,7 @@ In order to sync the data from the `tracking.user_behavior.validated` and `track
 make deploy_s3_connector
 ```
 
-Go to the `http://localhost:9021/` (default user and password is `minioadmin:minioadmin`) at the `Connect` tab and you should see a new connector called `minio-validated-sink` and `minio-invalidated-sink`.
+Go to `http://localhost:9021/` (default user and password is `minioadmin:minioadmin`) at the `Connect` tab and you should see new connectors called `minio-validated-sink` and `minio-invalidated-sink`.
 
 To see the MinIO UI, you can go to `http://localhost:9001/`. There are 2 buckets, `validated-events-bucket` and `invalidated-events-bucket`, you can go to each bucket and you should see the events being synced.
 
@@ -303,7 +397,7 @@ Each record in buckets is a JSON file, you can click on the file and you should 
 
 ![MinIO Record](./docs/images/minio-record.jpg)
 
-### Start Orchestration
+### 🔄 Start Orchestration
 
 ```bash
 make up-orchestration
@@ -317,13 +411,13 @@ This will start the Airflow service and the other services that are needed for t
 - MLflow (Model Registry)
 - Prometheus & Grafana (for Ray monitoring)
 
-Relevant URLs:
+**Relevant URLs:**
 
-- MinIO UI: `http://localhost:9001/`
-- Airflow UI: `http://localhost:8080/` (user/password: `airflow:airflow`)
-- Ray Dashboard: `http://localhost:8265/`
-- Grafana: `http://localhost:3009/`
-- MLflow UI: `http://localhost:5001/`
+- MinIO UI: `http://localhost:9001/` 🖥️
+- Airflow UI: `http://localhost:8080/` (user/password: `airflow:airflow`) 🔗
+- Ray Dashboard: `http://localhost:8265/` 📊
+- Grafana: `http://localhost:3009/` 📉
+- MLflow UI: `http://localhost:5001/` 🖥️
 
 ### Data and Training Pipeline
 
@@ -354,9 +448,9 @@ The `data_pipeline` DAG is composed of six tasks, divided into three layers:
 
 Trigger the `data_pipeline` DAG, and you should see the tasks running. This DAG will take some time to complete, but you can check the logs in the Airflow UI to see the progress. For simplicity, I hardcoded the `MINIO_PATH_PREFIX` to `topics/tracking.user_behavior.validated/year=2025/month=01`. Ideally, you should use the actual timestamp for each run. For example, `validated-events-bucket/topics/tracking.user_behavior.validated/year=2025/month=01/day=07/hour=XX`, where XX is the hour of the day.
 
-I also use checkpointing to ensure the DAG is resilient to failures and can resume from where it left off, the checkpoint is stored in the Data Lake, just under the `MINIO_PATH_PREFIX`, so if the DAG fails, you can simply trigger it again, and it will resume from the last checkpoint.
+I also use checkpointing to ensure the DAG is resilient to failures and can resume from where it left off. The checkpoint is stored in the Data Lake, just under the `MINIO_PATH_PREFIX`, so if the DAG fails, you can simply trigger it again, and it will resume from the last checkpoint.
 
-**Note**: One thing you could improve is to use `Spark` or `Ray` to load and process the data. In my case, I want to use Ray to load and process the data, but sadly I got some issues and didn't have time to fix it.
+**⚠️ Note**: One thing you could improve is to use `Spark` or `Ray` to load and process the data. In my case, I want to use Ray to load and process the data, but sadly I got some issues and didn't have time to fix it.
 
 #### 🤼‍♂️ Training Pipeline
 
@@ -373,7 +467,7 @@ Trigger the `training_pipeline` DAG, and you should see the tasks running. This 
 
 ![Training Pipeline Tasks](./docs/images/training-pipeline-tasks.jpg)
 
-After hit the `Trigger DAG` button, you should see the tasks running. The `tune_hyperparameters` task will `deferred` because it will submit the Ray Tune job to the Ray Cluster and use polling to check if the job is done. The same happens with the `train_final_model` task.
+After hitting the `Trigger DAG` button, you should see the tasks running. The `tune_hyperparameters` task will be `deferred` because it will submit the Ray Tune job to the Ray Cluster and use polling to check if the job is done. The same happens with the `train_final_model` task.
 
 When the `tune_hyperparameters` or `train_final_model` tasks are running, you can go to the Ray Dashboard at `http://localhost:8265` and you should see the tasks running.
 
@@ -387,7 +481,7 @@ To see the results of the training, you can go to the MLflow UI at `http://local
 
 ![MLflow UI](./docs/images/mlflow-ui.jpg)
 
-The model will be versioned in the Model Registry, you can go to the `http://localhost:5001/` and hit the `Models` tab and you should see the model.
+The model will be versioned in the Model Registry, you can go to `http://localhost:5001/` and hit the `Models` tab and you should see the model.
 
 ![MLflow Models](./docs/images/mlflow-models.jpg)
 
@@ -413,7 +507,7 @@ To view the Swagger UI, you can go to `http://localhost:8001/docs`.
 
 The `redis` service is a Redis instance that will store the features.
 
-#### Syncing Data from Kafka to Redis
+#### 🔄 Syncing Data from Kafka to Redis
 
 First, we need to start the `validated_events_to_features` job, this job will consume the `tracking.user_behavior.validated` topic, process the data, and store it in the `model.features.ready` topic.
 
@@ -429,9 +523,9 @@ Then, we need to start the `kafka_to_feast_online_store` job, this job will cons
 make kafka_to_feast_online_store
 ```
 
-![Kafka to Feast Online Store Job](./docs/images/kafka-to-feast-online-store-job-log.jpg)
+![Kafka to Feast Online Store Job Log](./docs/images/kafka-to-feast-online-store-job-log.jpg)
 
-This command will cd to `src/feature_stores`, create a virtual environment, activate it, install the dependencies, and run the `ingest_stream_to_online_store.py` script. This script will consume the `tracking.user_behavior.validated` topic, process the data, and store it in the `model.features.ready` topic.
+This command will `cd` to `src/feature_stores`, create a virtual environment, activate it, install the dependencies, and run the `ingest_stream_to_online_store.py` script. This script will consume the `tracking.user_behavior.validated` topic, process the data, and store it in the `model.features.ready` topic.
 
 Here is an example of the record in the `model.features.ready` topic:
 
@@ -457,13 +551,13 @@ Here is an example of the record in the `model.features.ready` topic:
 make up-serving
 ```
 
-This command will start the Serving Pipeline. Note that we did not portfward the `8000` port in the `docker-compose.serving.yaml` file, but we just expose it. The reason is that we use Ray Serve, and the job will be submitted to the Ray Cluster. That is the reason why you see the port `8000` in the `docker-compose.serving.ray` file instead of the `docker-compose.serving.yaml` file.
+This command will start the Serving Pipeline. Note that we did not port forward the `8000` port in the `docker-compose.serving.yaml` file, but we just expose it. The reason is that we use Ray Serve, and the job will be submitted to the Ray Cluster. That is the reason why you see the port `8000` in the `docker-compose.serving.ray` file instead of the `docker-compose.serving.yaml` file.
 
 ![Serving Pipeline](./docs/images/serving-pipeline-swagger-ui.jpg)
 
 ### 🔎 Start Observability
 
-#### Signoz
+#### 📈 Signoz
 
 ```bash
 make up-observability
@@ -475,19 +569,19 @@ This command will start the Observability Pipeline. This is a SigNoz instance th
 
 ![Observability](./docs/images/signoz-2.jpg)
 
-#### Prometheus and Grafana
+#### 📉 Prometheus and Grafana
 
 To see the Ray Cluster information, you can go to `http://localhost:3009/` and you should see the Grafana dashboard.
 
 ![Grafana](./docs/images/grafana.jpg)
 
-### NGINX
+### 🔒 NGINX
 
 ```bash
 make up-nginx
 ```
 
-This command will start the NGINX Proxy Manager, you can go to `http://localhost:81/` and you should see the NGINX Proxy Manager UI. The default user and password is `admin@example.com:changeme`. Then you can setup the reverse proxy for the Ray Dashboard, MLflow, Airflow, and more. For SSL, you can use the Let's Encrypt, and for domain, you can use DuckDNS.
+This command will start the NGINX Proxy Manager, you can go to `http://localhost:81/` and you should see the NGINX Proxy Manager UI. The default user and password is `admin@example.com:changeme`. Then you can setup the reverse proxy for the Ray Dashboard, MLflow, Airflow, and more. For SSL, you can use Let's Encrypt, and for domain, you can use DuckDNS.
 
 ![NGINX Proxy Manager 1](./docs/images/nginx-proxy-manager-1.jpg)
 
