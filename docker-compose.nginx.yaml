@@ -27,8 +27,8 @@ services:
       - ./nginx-data/data:/data
       - ./nginx-data/letsencrypt:/etc/letsencrypt
     networks:
-      - easydatapipeline_default
+      - easymlops_network
 
 networks:
-  easydatapipeline_default:
+  easymlops_network:
     external: true

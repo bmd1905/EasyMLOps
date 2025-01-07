@@ -11,7 +11,7 @@ from schema_registry.client import SchemaRegistryClient, schema
 
 load_dotenv()
 
-OUTPUT_TOPICS = os.getenv("KAFKA_OUTPUT_TOPICS", "raw-events-topic")
+OUTPUT_TOPICS = os.getenv("KAFKA_OUTPUT_TOPICS", "tracking.raw_user_behavior")
 BOOTSTRAP_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "broker:9092")
 SCHEMA_REGISTRY_SERVER = os.getenv(
     "KAFKA_SCHEMA_REGISTRY_URL", "http://schema-registry:8081"
@@ -72,7 +72,7 @@ def create_streams(servers, avro_schemas_path, schema_registry_client):
             producer = KafkaProducer(
                 bootstrap_servers=servers,
                 value_serializer=str.encode,  # Simple string encoding
-                batch_size=100,  # Increase batch size (default 16384)
+                batch_size=16384,  # Increase batch size (default 16384)
                 buffer_memory=33554432,  # 32MB buffer memory
                 compression_type="gzip",  # Enable compression
                 linger_ms=50,  # Wait up to 50ms to batch messages

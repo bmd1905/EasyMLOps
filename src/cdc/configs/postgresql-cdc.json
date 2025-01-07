@@ -8,7 +8,7 @@
     "database.password": "cdc",
     "database.dbname": "cdc",
     "plugin.name": "pgoutput",
-    "database.server.name": "cdc_",
+    "database.server.name": "tracking_postgres_cdc",
     "table.include.list": "public.events",
     "transforms": "unwrap",
     "transforms.unwrap.type": "io.debezium.transforms.ExtractNewRecordState",

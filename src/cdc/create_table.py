@@ -2,8 +2,7 @@ import os
 
 from dotenv import load_dotenv
 from loguru import logger
-
-from .postgresql_client import PostgresSQLClient
+from postgresql_client import PostgresSQLClient
 
 load_dotenv()
 
@@ -13,6 +12,7 @@ def main():
     pc = PostgresSQLClient(
         port=os.getenv("POSTGRES_PORT"),
         database=os.getenv("POSTGRES_DB"),
+        host=os.getenv("POSTGRES_HOST"),
         user=os.getenv("POSTGRES_USER"),
         password=os.getenv("POSTGRES_PASSWORD"),
     )

@@ -13,7 +13,9 @@ from ..jobs.base import FlinkJob
 class AlertInvalidEventsJob(FlinkJob):
     def __init__(self):
         self.jars_path = f"{os.getcwd()}/src/streaming/connectors/config/jars/"
-        self.input_topic = os.getenv("KAFKA_INVALID_TOPIC", "invalidated-events-topic")
+        self.input_topic = os.getenv(
+            "KAFKA_INVALID_TOPIC", "tracking.user_behavior.invalid"
+        )
         self.group_id = os.getenv("KAFKA_GROUP_ID", "flink-alert-group")
         self.bootstrap_servers = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
 

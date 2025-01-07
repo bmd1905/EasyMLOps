@@ -17,12 +17,12 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - easydatapipeline_default
+      - easymlops_network
 
 volumes:
   minio_data:
     driver: local
 
 networks:
-  easydatapipeline_default:
+  easymlops_network:
     external: true

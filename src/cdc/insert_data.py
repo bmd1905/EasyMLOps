@@ -4,12 +4,13 @@ from time import sleep
 import pandas as pd
 from dotenv import load_dotenv
 from loguru import logger
-
-from .postgresql_client import PostgresSQLClient
+from postgresql_client import PostgresSQLClient
 
 load_dotenv()
 
-SAMPLE_DATA_PATH = os.path.join(os.path.dirname(__file__), "data", "sample.csv")
+SAMPLE_DATA_PATH = os.path.join(
+    os.path.dirname(__file__), "data", "sample.parquet.gzip"
+)
 TABLE_NAME = "events"
 
 
@@ -42,7 +43,7 @@ def load_sample_data():
     """Load and prepare sample data from parquet file"""
     try:
         logger.info(f"Loading sample data from {SAMPLE_DATA_PATH}")
-        df = pd.read_csv("/home/aivn12s2/Desktop/Duc/EasyDataPipeline/data/sample.csv")
+        df = pd.read_parquet(SAMPLE_DATA_PATH, engine="fastparquet")
         records = []
         for idx, row in df.iterrows():
             record = format_record(row)
@@ -61,6 +62,7 @@ def main():
     pc = PostgresSQLClient(
         port=os.getenv("POSTGRES_PORT"),
         database=os.getenv("POSTGRES_DB"),
+        host=os.getenv("POSTGRES_HOST"),
         user=os.getenv("POSTGRES_USER"),
         password=os.getenv("POSTGRES_PASSWORD"),
     )

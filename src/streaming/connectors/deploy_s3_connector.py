@@ -20,13 +20,13 @@ CONNECTOR_CONFIGS = {
     "validated-events": {
         "name": "minio-validated-sink",
         "config_file": "src/streaming/connectors/config/minio-sink-connector.json",
-        "topic_override": "validated-events-topic",
+        "topic_override": "tracking.user_behavior.validated",
         "bucket_override": "validated-events-bucket",
     },
     "invalidated-events": {
         "name": "minio-invalidated-sink",
         "config_file": "src/streaming/connectors/config/minio-sink-connector.json",
-        "topic_override": "invalidated-events-topic",
+        "topic_override": "tracking.user_behavior.invalid",
         "bucket_override": "invalidated-events-bucket",
     },
 }

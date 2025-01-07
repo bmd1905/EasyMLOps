@@ -11,13 +11,13 @@ services:
     healthcheck:
       test:
         [
-          'CMD',
-          'curl',
-          '--silent',
-          '--fail',
-          '-X',
-          'GET',
-          'http://localhost:8083/connectors',
+          "CMD",
+          "curl",
+          "--silent",
+          "--fail",
+          "-X",
+          "GET",
+          "http://localhost:8083/connectors",
         ]
       start_period: 10s
       interval: 10s
@@ -39,7 +39,7 @@ services:
       CONNECT_VALUE_CONVERTER_SCHEMA_REGISTRY_URL: http://schema-registry:8081
       CONNECT_TOPIC_CREATION_ENABLE: true
     networks:
-      - easydatapipeline_default
+      - easymlops_network
 
   # Debezium UI
   debezium-ui:
@@ -51,11 +51,11 @@ services:
       debezium:
         condition: service_healthy
     ports:
-      - '8082:8080'
+      - "8082:8080"
     environment:
       KAFKA_CONNECT_URIS: http://debezium:8083
     networks:
-      - easydatapipeline_default
+      - easymlops_network
 
   # CDC Postgres
   cdc-postgresql:
@@ -63,10 +63,10 @@ services:
     # so that Debezium can capture change
     platform: linux/x86_64
     image: postgres:latest
-    command: ['postgres', '-c', 'wal_level=logical']
+    command: ["postgres", "-c", "wal_level=logical"]
     container_name: cdc-postgresql
     healthcheck:
-      test: ['CMD', 'psql', '-U', 'cdc', '-c', 'SELECT 1']
+      test: ["CMD", "psql", "-U", "cdc", "-c", "SELECT 1"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -79,11 +79,28 @@ services:
     volumes:
       - cdc_postgres_data:/var/lib/postgresql/data
     networks:
-      - easydatapipeline_default
+      - easymlops_network
+
+  cdc-python:
+    build:
+      context: ./src/cdc
+      dockerfile: Dockerfile
+    container_name: cdc-python
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      cdc-postgresql:
+        condition: service_healthy
+      debezium:
+        condition: service_healthy
+    networks:
+      - easymlops_network
 
 volumes:
   cdc_postgres_data:
 
 networks:
-  easydatapipeline_default:
+  easymlops_network:
     external: true

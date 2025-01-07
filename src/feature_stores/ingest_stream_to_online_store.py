@@ -34,7 +34,7 @@ warnings.filterwarnings("ignore", category=UserWarning, module="feast.utils")
 
 # Configure environment variables
 KAFKA_BOOTSTRAP_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
-KAFKA_FEATURE_TOPIC = os.getenv("KAFKA_FEATURES_TOPIC", "feature-events-topic")
+KAFKA_FEATURE_TOPIC = os.getenv("KAFKA_FEATURES_TOPIC", "model.features.ready")
 
 # Define the schema using PySpark's StructType
 EVENT_SCHEMA = StructType(
@@ -274,6 +274,7 @@ class CustomSparkKafkaProcessor(SparkKafkaProcessor):
             .option("kafka.bootstrap.servers", KAFKA_BOOTSTRAP_SERVERS)
             .option("subscribe", KAFKA_FEATURE_TOPIC)
             .option("startingOffsets", "latest")
+            .option("failOnDataLoss", "false")
             .load()
         )
 

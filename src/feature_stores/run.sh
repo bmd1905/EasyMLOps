@@ -11,9 +11,9 @@ python -m venv .venv
 source .venv/bin/activate
 
 # Install dependencies
-# echo "Installing dependencies..."
-# pip install --upgrade pip
-# pip install -r requirements.txt
+echo "Installing dependencies..."
+pip install --upgrade pip
+pip install -r requirements.txt
 
 # Setup feature store
 echo "Setting up feature store..."

@@ -3,28 +3,28 @@
 
 # Configuration
 KAFKA_COMPOSE_FILE := docker-compose.kafka.yaml
-AIRFLOW_COMPOSE_FILE := src/airflow/docker-compose.airflow.yaml
+ORCHESTRATION_COMPOSE_FILE := ./src/orchestration/docker-compose.orchestration.yaml
 DATA_LAKE_COMPOSE_FILE := docker-compose.data-lake.yaml
 DWH_COMPOSE_FILE := docker-compose.dwh.yaml
 ONLINE_STORE_COMPOSE_FILE := docker-compose.online-store.yaml
-RAY_COMPOSE_FILE := src/ray/docker-compose.ray.yaml
-MONITOR_COMPOSE_FILE := docker-compose.monitor.yaml
-MLFLOW_COMPOSE_FILE := docker-compose.mlflow.yaml
+RAY_COMPOSE_FILE := docker-compose.ray.yaml
+GRAFANA_COMPOSE_FILE := docker-compose.grafana.yaml
+MODEL_REGISTRY_COMPOSE_FILE := docker-compose.model-registry.yaml
 CDC_COMPOSE_FILE := docker-compose.cdc.yaml
-SERVING_COMPOSE_FILE := src/serving/docker-compose.serving.yaml
+SERVING_COMPOSE_FILE := docker-compose.serving.yaml
 NGINX_COMPOSE_FILE := docker-compose.nginx.yaml
-OBSERVABILITY_COMPOSE_FILE := ./src/observability/clickhouse-setup/docker-compose-minimal.yaml
+OBSERVABILITY_COMPOSE_FILE := docker-compose.observability.yaml
 PYTHON := python3
 
-# Docker Compose Commands
 up-network:
-	docker network create easydatapipeline_default
+	docker network create easymlops_network
 
+# ------------------------------------------ Data and Training Pipeline Commands ------------------------------------------
 up-kafka:
 	docker compose -f $(KAFKA_COMPOSE_FILE) up -d --build
 
-up-airflow:
-	docker compose -f $(AIRFLOW_COMPOSE_FILE) up -d --build
+up-cdc: up-kafka
+	docker compose -f $(CDC_COMPOSE_FILE) up -d --build
 
 up-data-lake:
 	docker compose -f $(DATA_LAKE_COMPOSE_FILE) up -d --build
@@ -32,21 +32,22 @@ up-data-lake:
 up-dwh:
 	docker compose -f $(DWH_COMPOSE_FILE) up -d --build
 
-up-online-store:
-	docker compose -f $(ONLINE_STORE_COMPOSE_FILE) up -d --build
-
 up-ray-cluster:
-	docker build -t raytest ./src/ray
 	docker compose -f $(RAY_COMPOSE_FILE) up -d --build
 
-up-monitor:
-	docker compose -f $(MONITOR_COMPOSE_FILE) up -d --build
+up-grafana:
+	docker compose -f $(GRAFANA_COMPOSE_FILE) up -d --build
 
-up-mlflow:
-	docker compose -f $(MLFLOW_COMPOSE_FILE) up -d --build
+up-model-registry:
+	docker compose -f $(MODEL_REGISTRY_COMPOSE_FILE) up -d --build
 
-up-cdc:
-	docker compose -f $(CDC_COMPOSE_FILE) up -d --build
+up-orchestration: up-data-lake up-dwh up-ray-cluster up-model-registry up-grafana
+	docker compose -f $(ORCHESTRATION_COMPOSE_FILE) up -d --build
+	make deploy_s3_connector
+
+# ------------------------------------------ Serving Pipeline Commands ------------------------------------------
+up-online-store:
+	docker compose -f $(ONLINE_STORE_COMPOSE_FILE) up -d --build
 
 up-serving:
 	docker compose -f $(SERVING_COMPOSE_FILE) up -d --build
@@ -57,14 +58,15 @@ up-nginx:
 up-observability:
 	docker compose -f $(OBSERVABILITY_COMPOSE_FILE) up -d --build
 
+# ------------------------------------------ Down Commands ------------------------------------------
 down-network:
-	docker network rm easydatapipeline_default
+	docker network rm easymlops_network
 
 down-kafka:
 	docker compose -f $(KAFKA_COMPOSE_FILE) down
 
-down-airflow:
-	docker compose -f $(AIRFLOW_COMPOSE_FILE) down
+down-orchestration:
+	docker compose -f $(ORCHESTRATION_COMPOSE_FILE) down
 
 down-data-lake:
 	docker compose -f $(DATA_LAKE_COMPOSE_FILE) down
@@ -74,15 +76,16 @@ down-dwh:
 
 down-online-store:
 	docker compose -f $(ONLINE_STORE_COMPOSE_FILE) down
+	make start-feature-store
 
 down-ray-cluster:
 	docker compose -f $(RAY_COMPOSE_FILE) down -v
 
-down-monitor:
-	docker compose -f $(MONITOR_COMPOSE_FILE) down -v
+down-grafana:
+	docker compose -f $(GRAFANA_COMPOSE_FILE) down -v
 
-down-mlflow:
-	docker compose -f $(MLFLOW_COMPOSE_FILE) down -v
+down-model-registry:
+	docker compose -f $(MODEL_REGISTRY_COMPOSE_FILE) down -v
 
 down-cdc:
 	docker compose -f $(CDC_COMPOSE_FILE) down -v
@@ -96,25 +99,26 @@ down-nginx:
 down-observability:
 	docker compose -f $(OBSERVABILITY_COMPOSE_FILE) down -v
 
+# ------------------------------------------ Restart Commands ------------------------------------------
 restart-kafka: down-kafka up-kafka
-restart-airflow: down-airflow up-airflow
+restart-orchestration: down-orchestration up-orchestration
 restart-data-lake: down-data-lake up-data-lake
 restart-dwh: down-dwh up-dwh
 restart-online-store: down-online-store up-online-store
 restart-ray-cluster: down-ray-cluster up-ray-cluster
-restart-monitor: down-monitor up-monitor
-restart-mlflow: down-mlflow up-mlflow
+restart-grafana: down-grafana up-grafana
+restart-model-registry: down-model-registry up-model-registry
 restart-cdc: down-cdc up-cdc
 restart-serving: down-serving up-serving
 restart-nginx: down-nginx up-nginx
 restart-observability: down-observability up-observability
 
-# Utility Commands
+# ------------------------------------------ Logs Commands ------------------------------------------
 logs-kafka:
 	docker compose -f $(KAFKA_COMPOSE_FILE) logs -f
 
-logs-airflow:
-	docker compose -f $(AIRFLOW_COMPOSE_FILE) logs -f
+logs-orchestration:
+	docker compose -f $(ORCHESTRATION_COMPOSE_FILE) logs -f
 
 logs-data-lake:
 	docker compose -f $(DATA_LAKE_COMPOSE_FILE) logs -f
@@ -128,11 +132,11 @@ logs-online-store:
 logs-ray-cluster:
 	docker compose -f $(RAY_COMPOSE_FILE) logs -f
 
-logs-monitor:
-	docker compose -f $(MONITOR_COMPOSE_FILE) logs -f
+logs-grafana:
+	docker compose -f $(GRAFANA_COMPOSE_FILE) logs -f
 
-logs-mlflow:
-	docker compose -f $(MLFLOW_COMPOSE_FILE) logs -f
+logs-model-registry:
+	docker compose -f $(MODEL_REGISTRY_COMPOSE_FILE) logs -f
 
 logs-cdc:
 	docker compose -f $(CDC_COMPOSE_FILE) logs -f
@@ -146,15 +150,16 @@ logs-nginx:
 logs-observability:
 	docker compose -f $(OBSERVABILITY_COMPOSE_FILE) logs -f
 
+# ------------------------------------------ Clean Commands ------------------------------------------
 clean:
 	docker compose -f $(KAFKA_COMPOSE_FILE) down -v
-	docker compose -f $(AIRFLOW_COMPOSE_FILE) down -v
+	docker compose -f $(ORCHESTRATION_COMPOSE_FILE) down -v
 	docker compose -f $(DATA_LAKE_COMPOSE_FILE) down -v
 	docker compose -f $(DWH_COMPOSE_FILE) down -v
 	docker compose -f $(ONLINE_STORE_COMPOSE_FILE) down -v
 	docker compose -f $(RAY_COMPOSE_FILE) down -v
-	docker compose -f $(MONITOR_COMPOSE_FILE) down -v
-	docker compose -f $(MLFLOW_COMPOSE_FILE) down -v
+	docker compose -f $(GRAFANA_COMPOSE_FILE) down -v
+	docker compose -f $(MODEL_REGISTRY_COMPOSE_FILE) down -v
 	docker compose -f $(CDC_COMPOSE_FILE) down -v
 	docker compose -f $(SERVING_COMPOSE_FILE) down -v
 	docker compose -f $(NGINX_COMPOSE_FILE) down -v
@@ -173,7 +178,7 @@ view-schemas:
 view-consumer-groups:
 	docker compose -f $(KAFKA_COMPOSE_FILE) exec -it broker kafka-consumer-groups --bootstrap-server broker:9092 --list
 
-# ------------- Feature Store Commands
+# ------------------------------------------ Feature Store Commands ------------------------------------------
 start-feature-store:
 	cd src/feature_stores && ./run.sh && . .venv/bin/activate && python materialize_features.py && uvicorn api:app --host 0.0.0.0 --port 8002 --reload
 
@@ -183,15 +188,15 @@ materialize-features:
 start-feature-service:
 	cd src/feature_stores && . .venv/bin/activate && uvicorn api:app --host 0.0.0.0 --port 8002 --reload
 
-# ------------- Streaming Commands
+# ------------------------------------------ Streaming Commands ------------------------------------------
 producer:
 	uv run $(PYTHON) src/producer/produce.py -b=localhost:9092 -s=http://localhost:8081
 
-consumer:
+schema_validation:
 	uv run $(PYTHON) -m src.streaming.main schema_validation
 
-feature_calculation:
-	uv run $(PYTHON) -m src.streaming.main feature_calculation
+validated_events_to_features:
+	uv run $(PYTHON) -m src.streaming.main validated_events_to_features
 
 deploy_s3_connector:
 	uv run $(PYTHON) -m src.streaming.connectors.deploy_s3_connector
@@ -199,19 +204,10 @@ deploy_s3_connector:
 alert_invalid_events:
 	uv run $(PYTHON) -m src.streaming.main alert_invalid_events
 
-# ------------- CDC Commands
-cdc_setup:
-	uv run bash src/cdc/run.sh register_connector src/cdc/configs/postgresql-cdc.json
+kafka_to_feast_online_store:
+	cd src/feature_stores && ./run.sh && . .venv/bin/activate && python ingest_stream_to_online_store.py
 
-insert_cdc_data:
-	uv run $(PYTHON) -m src.cdc.create_table
-	uv run $(PYTHON) -m src.cdc.insert_data
-
-# ------------- Online Store Commands
-ingest_stream_to_online_store:
-	cd src/feature_stores && . .venv/bin/activate && python ingest_stream_to_online_store.py
-
-# ------------- Help Command
+# ------------------------------------------ Help Command ------------------------------------------
 help:
 	@echo "Available commands:"
 	@echo "  make producer         - Run Kafka producer test"

@@ -9,6 +9,7 @@ dependencies = [
     "avro-python3==1.8.1",
     "boto3==1.35.74",
     "botocore>=1.35.77",
+    "fastparquet>=0.8.3",
     "feast>=0.20.2",
     "ipykernel>=6.29.5",
     "kafka-python>=2.0.2",
