@@ -27,8 +27,8 @@ The system comprises four main pipelines—**Data**, **Training**, **Serving**, 
 #### c. DataLake (MinIO)
 
 - **Kafka → S3 Sink Connectors** write validated and invalid data to **MinIO**.
-- Ensure no data is lost, aka `EtLT` (Extract, transform, Load, Transform).
-- Ensures permanent storage of raw data, including invalid events for alerting or recovery.
+- No data is lost—this approach follows `EtLT` (Extract, transform, Load, Transform).
+- Ensures permanent storage of both raw and invalid events for alerting or recovery.
 
 #### d. Data Warehouse (PostgreSQL)
 
@@ -41,7 +41,7 @@ The system comprises four main pipelines—**Data**, **Training**, **Serving**, 
 #### e. Online Store (Redis)
 
 - Real-time ingestion of features:
-  - **Flink Jobs** or custom Python scripts convert validated events to feature-ready topics.
+  - **Flink Jobs** or custom Python scripts convert validated events into feature-ready topics.
   - **Feast** or custom ingestion pipelines populate Redis for low-latency feature retrieval.
 
 ---
@@ -80,7 +80,7 @@ The system comprises four main pipelines—**Data**, **Training**, **Serving**, 
 
 #### c. Scalability & Performance
 
-- Ray Serve scales horizontally under heavy workloads.
+- **Ray Serve** scales horizontally under heavy workloads.
 - **NGINX** acts as a reverse proxy, routing requests efficiently.
 
 ---
@@ -176,7 +176,7 @@ make up-kafka
 
 The last service in the `docker-compose.kafka.yaml` file is `kafka_producer`, this service acts as a producer and will start sending messages to the `tracking.raw_user_behavior` topic.
 
-To check if Kafka is running, you can go to the `http://localhost:9021/` and you should see the Kafka dashboard. Then go to the `Topics` tab and you should see the `tracking.raw_user_behavior`.
+To check if Kafka is running, you can go to `http://localhost:9021/` and you should see the Kafka dashboard. Then go to the `Topics` tab and you should see `tracking.raw_user_behavior` topic.
 
 ![Kafka Topics](./docs/images/kafka-topic.jpg)
 
@@ -251,17 +251,17 @@ Here is an example of the message's value in the `tracking.raw_user_behavior` to
 make up-cdc
 ```
 
-Next, we need to start the CDC service. This Docker Compose file contains:
+Next, we start the CDC service. This Docker Compose file contains:
 
 - Debezium
 - PostgreSQL db
-- A Python service that will register the connector, create the table, and insert the data into the PostgreSQL db.
+- A Python service that registers the connector, creates the table, and inserts the data into PostgreSQL.
 
-The data is automatically synced from the PostgreSQL db to the `tracking_postgres_cdc.public.events` topic. To check if the connector is working, go to `Connect` tab and you should see a connector called `cdc-postgresql`.
+The data automatically syncs from PostgreSQL to the `tracking_postgres_cdc.public.events` topic. To confirm, go to the `Connect` tab in the Kafka UI; you should see a connector called `cdc-postgresql`.
 
 ![Kafka Connectors](./docs/images/kafka-connectors.jpg)
 
-Go back to the `http://localhost:9021/` and you should see a new topic called `tracking_postgres_cdc.public.events`.
+Return to `http://localhost:9021/`; there should be a new topic called `tracking_postgres_cdc.public.events`.
 
 ![Kafka Topics](./docs/images/kafka-topic-cdc.jpg)
 
@@ -275,7 +275,7 @@ This is a Flink job that will consume the `tracking_postgres_cdc.public.events` 
 
 ![Schema Validation Job](./docs/images/schema-validation-job-log.jpg)
 
-After starting the job, you can go to the `http://localhost:9021/` and you should see the `tracking.user_behavior.validated` and `tracking.user_behavior.invalid` topics.
+After starting the job, you can go to `http://localhost:9021/` and you should see the `tracking.user_behavior.validated` and `tracking.user_behavior.invalid` topics.
 
 ![Kafka Topics](./docs/images/kafka-topic-schema-validation.jpg)
 
@@ -311,18 +311,18 @@ make up-orchestration
 
 This will start the Airflow service and the other services that are needed for the orchestration. Here is the list of services that will be started:
 
-- Data Lake (MinIO)
-- Data Warehouse (PostgreSQL)
+- MinIO (Data Lake)
+- PostgreSQL (Data Warehouse)
 - Ray Cluster
-- Model Registry (MLflow)
-- Prometheus and Grafana (visualize Ray Cluster)
+- MLflow (Model Registry)
+- Prometheus & Grafana (for Ray monitoring)
 
-Here are the URLs to access the different services:
+Relevant URLs:
 
 - MinIO UI: `http://localhost:9001/`
-- Airflow UI: `http://localhost:8080/`
+- Airflow UI: `http://localhost:8080/` (user/password: `airflow:airflow`)
 - Ray Dashboard: `http://localhost:8265/`
-- Grafana Dashboard: `http://localhost:3009/`
+- Grafana: `http://localhost:3009/`
 - MLflow UI: `http://localhost:5001/`
 
 ### Data and Training Pipeline
