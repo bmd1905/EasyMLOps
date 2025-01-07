@@ -4,7 +4,7 @@ A turnkey MLOps pipeline demonstrating how to go from raw events to real-time pr
 
 ## 🌐 Architecture Overview
 
-![EasyMLOps Architecture](./docs/pipeline.png)
+<!-- ![EasyMLOps Architecture](./docs/pipeline.png) -->
 
 The system is composed of four main pipelines—Data, Training, Serving, and Observability—along with a Dev Environment and a Model Registry.
 
@@ -126,9 +126,76 @@ make up-network
 make up-kafka
 ```
 
-The last service in the `docker-compose.kafka.yaml` file is `kafka_producer`, this service acts as a producer and will start sending messages to the `tracking.raw_user_behavior`.
+The last service in the `docker-compose.kafka.yaml` file is `kafka_producer`, this service acts as a producer and will start sending messages to the `tracking.raw_user_behavior` topic.
 
-To check if all services are running, you can go to the `http://localhost:9021/` and you should see the Kafka dashboard. Then go to the `Topics` tab and you should see the `tracking.raw_user_behavior`.
+To check if Kafka is running, you can go to the `http://localhost:9021/` and you should see the Kafka dashboard. Then go to the `Topics` tab and you should see the `tracking.raw_user_behavior`.
+
+![Kafka Topics](./docs/images/kafka-topic.jpg)
+
+To check if the producer is sending messages, you can click on the `tracking.raw_user_behavior` topic and you should see the messages being sent.
+
+![Kafka Messages](./docs/images/kafka-message.jpg)
+
+Here is an example of the message's value in the `tracking.raw_user_behavior` topic:
+
+```json
+{
+  "schema": {
+    "type": "struct",
+    "fields": [
+      {
+        "name": "event_time",
+        "type": "string"
+      },
+      {
+        "name": "event_type",
+        "type": "string"
+      },
+      {
+        "name": "product_id",
+        "type": "long"
+      },
+      {
+        "name": "category_id",
+        "type": "long"
+      },
+      {
+        "name": "category_code",
+        "type": ["null", "string"],
+        "default": null
+      },
+      {
+        "name": "brand",
+        "type": ["null", "string"],
+        "default": null
+      },
+      {
+        "name": "price",
+        "type": "double"
+      },
+      {
+        "name": "user_id",
+        "type": "long"
+      },
+      {
+        "name": "user_session",
+        "type": "string"
+      }
+    ]
+  },
+  "payload": {
+    "event_time": "2019-10-01 02:30:12 UTC",
+    "event_type": "view",
+    "product_id": 1306133,
+    "category_id": "2053013558920217191",
+    "category_code": "computers.notebook",
+    "brand": "xiaomi",
+    "price": 1029.37,
+    "user_id": 512900744,
+    "user_session": "76b918d5-b344-41fc-8632-baf222ec760f"
+  }
+}
+```
 
 #### Start CDC
 
@@ -136,9 +203,19 @@ To check if all services are running, you can go to the `http://localhost:9021/`
 make up-cdc
 ```
 
-Next, we need to start the CDC service. This Docker Compose file contains Debezium, a PostgreSQL CDC service, and a Python service that will register the connector, create the table, and insert the data into the PostgreSQL database. The data is automatically synced from the PostgreSQL database to the `cdc_.public.events` topic.
+Next, we need to start the CDC service. This Docker Compose file contains:
 
-Go back to the `http://localhost:9021/` and you should see a new topic called `cdc_.public.events`.
+- Debezium
+- PostgreSQL db
+- A Python service that will register the connector, create the table, and insert the data into the PostgreSQL db.
+
+The data is automatically synced from the PostgreSQL db to the `tracking_postgres_cdc.public.events` topic. To check if the connector is working, go to `Connect` tab and you should see a connector called `cdc-postgresql`.
+
+![Kafka Connectors](./docs/images/kafka-connectors.jpg)
+
+Go back to the `http://localhost:9021/` and you should see a new topic called `tracking_postgres_cdc.public.events`.
+
+![Kafka Topics](./docs/images/kafka-topic-cdc.jpg)
 
 ### Start Schema Validation Job
 
@@ -146,7 +223,7 @@ Go back to the `http://localhost:9021/` and you should see a new topic called `c
 make schema_validation
 ```
 
-This is a Flink job that will consume the `cdc_.public.events` and `tracking.raw_user_behavior` topics and validate the schema of the events. The validated events will be sent to the `validated-events-topic` and the invalid events will be sent to the `invalidated-events-topic`. For easier to understand, I don't push these flink jobs into a docker compose file, but you can do it if you want. Watch the terminal to see the job running.
+This is a Flink job that will consume the `tracking_postgres_cdc.public.events` and `tracking.raw_user_behavior` topics and validate the schema of the events. The validated events will be sent to the `validated-events-topic` and the invalid events will be sent to the `invalidated-events-topic`. For easier to understand, I don't push these flink jobs into a docker compose file, but you can do it if you want. Watch the terminal to see the job running.
 
 ### Start Data Lake
 
