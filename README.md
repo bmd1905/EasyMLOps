@@ -369,7 +369,7 @@ This is a Flink job that will consume the `tracking_postgres_cdc.public.events` 
 
 ![Schema Validation Job](./docs/images/schema-validation-job-log.jpg)
 
-We can handle 10k RPS, not that there are approximately 10% of failure events, I purposely make the producer to send invalid events to the `tracking.user_behavior.invalid` topic. You can check it of line `127` in `src/producer/produce.py`.
+We can handle `10k RPS`, noting that approximately `10%` of events are failures. I purposely make the producer send invalid events to the `tracking.user_behavior.invalid` topic. You can check this at line `127` in `src/producer/produce.py`.
 
 After starting the job, you can go to `http://localhost:9021/` and you should see the `tracking.user_behavior.validated` and `tracking.user_behavior.invalid` topics.
 
