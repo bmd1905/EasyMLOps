@@ -234,9 +234,11 @@ class SchemaValidationJob(FlinkJob):
             "KAFKA_INPUT_TOPICS", "tracking.raw_user_behavior"
         ).split(",")
         self.group_id = os.getenv("KAFKA_GROUP_ID", "flink-group")
-        self.valid_topic = os.getenv("KAFKA_VALID_TOPIC", "validated-events-topic")
+        self.valid_topic = os.getenv(
+            "KAFKA_VALID_TOPIC", "tracking.user_behavior.validated"
+        )
         self.invalid_topic = os.getenv(
-            "KAFKA_INVALID_TOPIC", "invalidated-events-topic"
+            "KAFKA_INVALID_TOPIC", "tracking.user_behavior.invalid"
         )
         self.bootstrap_servers = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
         self._admin_client = None

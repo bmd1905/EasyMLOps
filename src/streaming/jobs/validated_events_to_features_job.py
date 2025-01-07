@@ -105,7 +105,9 @@ def calculate_features(event: str) -> str:
 class ValidatedEventsToFeaturesJob(FlinkJob):
     def __init__(self):
         self.jars_path = f"{os.getcwd()}/src/streaming/connectors/config/jars/"
-        self.input_topic = os.getenv("KAFKA_VALID_TOPIC", "validated-events-topic")
+        self.input_topic = os.getenv(
+            "KAFKA_VALID_TOPIC", "tracking.user_behavior.validated"
+        )
         self.output_topic = os.getenv("KAFKA_FEATURES_TOPIC", "feature-events-topic")
         self.group_id = os.getenv("KAFKA_GROUP_ID", "flink-feature-group")
         self.bootstrap_servers = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")

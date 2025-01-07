@@ -223,7 +223,13 @@ Go back to the `http://localhost:9021/` and you should see a new topic called `t
 make schema_validation
 ```
 
-This is a Flink job that will consume the `tracking_postgres_cdc.public.events` and `tracking.raw_user_behavior` topics and validate the schema of the events. The validated events will be sent to the `validated-events-topic` and the invalid events will be sent to the `invalidated-events-topic`. For easier to understand, I don't push these flink jobs into a docker compose file, but you can do it if you want. Watch the terminal to see the job running.
+This is a Flink job that will consume the `tracking_postgres_cdc.public.events` and `tracking.raw_user_behavior` topics and validate the schema of the events. The validated events will be sent to the `tracking.user_behavior.validated` topic and the invalid events will be sent to the `tracking.user_behavior.invalid` topic, respectively. For easier to understand, I don't push these flink jobs into a docker compose file, but you can do it if you want. Watch the terminal to see the job running, the log may look like this:
+
+![Schema Validation Job](./docs/images/schema-validation-job-log.jpg)
+
+After starting the job, you can go to the `http://localhost:9021/` and you should see the `tracking.user_behavior.validated` and `tracking.user_behavior.invalid` topics.
+
+![Kafka Topics](./docs/images/kafka-topic-schema-validation.jpg)
 
 ### Start Data Lake
 
@@ -233,15 +239,21 @@ make up-data-lake
 
 This is a MinIO instance that will store both the validated and invalidated events, ensuring no data is lost. MinIO is compatible with the Amazon S3 API, Google Cloud Storage, and Azure Blob Storage, so you can use any S3 client to interact with it. I have already created a simple alert to monitor the invalidated events in `src/streaming/jobs/alert_invalid_events_job.py`. Just run `alert_invalid_events` to see the alert in action.
 
-In order to sync the data from the `validated-events-topic` and `invalidated-events-topic` to the MinIO, we need to deploy the S3 connector.
+In order to sync the data from the `tracking.user_behavior.validated` and `tracking.user_behavior.invalid` topics to the MinIO, we need to deploy the S3 connector.
 
 ```bash
 make deploy_s3_connector
 ```
 
-Go to the `http://localhost:9021/` and you should see a new connector called `minio-validated-sink` and `minio-invalidated-sink`.
+Go to the `http://localhost:9021/` (default user and password is `minioadmin:minioadmin`) at the `Connect` tab and you should see a new connector called `minio-validated-sink` and `minio-invalidated-sink`.
 
-To see the MinIO UI, you can go to `http://localhost:9001/`.
+To see the MinIO UI, you can go to `http://localhost:9001/`. There are 2 buckets, `validated-events-bucket` and `invalidated-events-bucket`, you can go to each bucket and you should see the events being synced.
+
+![MinIO Buckets](./docs/images/minio-buckets.jpg)
+
+Each record in buckets is a JSON file, you can click on the file and you should see the event.
+
+![MinIO Record](./docs/images/minio-record.jpg)
 
 ### Start Orchestration
 
@@ -255,7 +267,7 @@ This will start the Airflow service and the other services that are needed for t
 - Data Warehouse (PostgreSQL)
 - Ray Cluster
 - Model Registry (MLflow)
-- Grafana and Prometheus (visualize Ray Cluster)
+- Prometheus and Grafana (visualize Ray Cluster)
 
 Here are the URLs to access the different services:
 
@@ -267,11 +279,15 @@ Here are the URLs to access the different services:
 
 ### Data and Training Pipeline
 
-Go to the Airflow UI and you should see the `data_pipeline` and `training_pipeline` DAGs. These 2 DAGs are automatically triggered, but you can also trigger them manually.
+Go to the Airflow UI (default user and password is `airflow:airflow`) and you should see the `data_pipeline` and `training_pipeline` DAGs. These 2 DAGs are automatically triggered, but you can also trigger them manually.
+
+![Airflow DAGs](./docs/images/airflow-dags.jpg)
 
 #### 🔄 Data Pipeline
 
 The `data_pipeline` DAG is composed of six tasks, divided into three layers:
+
+![Data Pipeline DAG](./docs/images/data-pipeline-dag.jpg)
 
 ##### Bronze Layer:
 
@@ -288,16 +304,44 @@ The `data_pipeline` DAG is composed of six tasks, divided into three layers:
 5. **load_dimensions_and_facts** - Creates dimension and fact tables in the data warehouse.
 6. **quality_check_gold_data** - Conducts final quality checks on the "gold" tables to ensure the data is accurate and reliable for model training and analysis.
 
----
+Trigger the `data_pipeline` DAG, and you should see the tasks running. This DAG will take some time to complete, but you can check the logs in the Airflow UI to see the progress. For simplicity, I hardcoded the `MINIO_PATH_PREFIX` to `topics/tracking.user_behavior.validated/year=2025/month=01`. Ideally, you should use the actual timestamp for each run. For example, `validated-events-bucket/topics/tracking.user_behavior.validated/year=2025/month=01/day=07/hour=XX`, where XX is the hour of the day.
+
+I also use checkpointing to ensure the DAG is resilient to failures and can resume from where it left off, the checkpoint is stored in the Data Lake, just under the `MINIO_PATH_PREFIX`, so if the DAG fails, you can simply trigger it again, and it will resume from the last checkpoint.
+
+**Note**: One thing you could improve is to use `Spark` or `Ray` to load and process the data. In my case, I want to use Ray to load and process the data, but saddly I got some issues and didn't have time to fix it.
 
 #### 🤼‍♂️ Training Pipeline
 
 The `training_pipeline` DAG is composed of four tasks:
 
+![Training Pipeline DAG](./docs/images/training-pipeline-dag.jpg)
+
 1. **load_training_data** - Pulls processed data from the data warehouse for use in training the machine learning model.
 2. **tune_hyperparameters** - Utilizes Ray Tune to perform distributed hyperparameter tuning, optimizing the model's performance.
 3. **train_final_model** - Trains the final machine learning model using the best hyperparameters from the tuning phase.
 4. **save_results** - Saves the trained model and associated metrics to the Model Registry for future deployment and evaluation.
+
+Trigger the `training_pipeline` DAG, and you should see the tasks running. This DAG will take some time to complete, but you can check the logs in the Airflow UI to see the progress.
+
+![Training Pipeline Tasks](./docs/images/training-pipeline-tasks.jpg)
+
+After hit the `Trigger DAG` button, you should see the tasks running. The `tune_hyperparameters` task will `deferred` because it will submit the Ray Tune job to the Ray Cluster and use polling to check if the job is done. The same happens with the `train_final_model` task.
+
+When the `tune_hyperparameters` or `train_final_model` tasks are running, you can go to the Ray Dashboard at `http://localhost:8265` and you should see the tasks running.
+
+![Ray Dashboard](./docs/images/ray-dashboard.jpg)
+
+Click on the task and you should see the task details, including the id, status, time, logs, and more.
+
+![Ray Task Details](./docs/images/ray-task-details.jpg)
+
+To see the results of the training, you can go to the MLflow UI at `http://localhost:5001` and you should see the training results.
+
+![MLflow UI](./docs/images/mlflow-ui.jpg)
+
+The model will be versioned in the Model Registry, you can go to the `http://localhost:5001/` and hit the `Models` tab and you should see the model.
+
+![MLflow Models](./docs/images/mlflow-models.jpg)
 
 ### 🚀 Start Serving Pipeline
 
