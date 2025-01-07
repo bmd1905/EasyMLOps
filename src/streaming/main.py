@@ -13,14 +13,14 @@ def get_available_jobs() -> Dict[str, Type[FlinkJob]]:
     """Return a dictionary of available jobs with lazy loading"""
     return {
         "schema_validation": lambda: __import__(
-            "streaming.jobs.schema_validation_job", fromlist=["SchemaValidationJob"]
+            "src.streaming.jobs.schema_validation_job", fromlist=["SchemaValidationJob"]
         ).SchemaValidationJob,
         "alert_invalid_events": lambda: __import__(
-            "streaming.jobs.alert_invalid_events_job",
+            "src.streaming.jobs.alert_invalid_events_job",
             fromlist=["AlertInvalidEventsJob"],
         ).AlertInvalidEventsJob,
         "validated_events_to_features": lambda: __import__(
-            "streaming.jobs.validated_events_to_features_job",
+            "src.streaming.jobs.validated_events_to_features_job",
             fromlist=["ValidatedEventsToFeaturesJob"],
         ).ValidatedEventsToFeaturesJob,
     }
