@@ -356,7 +356,7 @@ Trigger the `data_pipeline` DAG, and you should see the tasks running. This DAG 
 
 I also use checkpointing to ensure the DAG is resilient to failures and can resume from where it left off, the checkpoint is stored in the Data Lake, just under the `MINIO_PATH_PREFIX`, so if the DAG fails, you can simply trigger it again, and it will resume from the last checkpoint.
 
-**Note**: One thing you could improve is to use `Spark` or `Ray` to load and process the data. In my case, I want to use Ray to load and process the data, but saddly I got some issues and didn't have time to fix it.
+**Note**: One thing you could improve is to use `Spark` or `Ray` to load and process the data. In my case, I want to use Ray to load and process the data, but sadly I got some issues and didn't have time to fix it.
 
 #### 🤼‍♂️ Training Pipeline
 
