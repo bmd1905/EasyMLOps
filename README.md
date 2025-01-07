@@ -4,86 +4,134 @@ A turnkey MLOps pipeline demonstrating how to go from raw events to real-time pr
 
 ## 🌐 Architecture Overview
 
-<!-- ![EasyMLOps Architecture](./docs/pipeline.png) -->
+![EasyMLOps Architecture](./docs/pipeline.png)
 
-The system is composed of four main pipelines—Data, Training, Serving, and Observability—along with a Dev Environment and a Model Registry.
-
----
-
-### 🔄 1. Data Pipeline
-
-1. **Producers**
-   Multiple producers emit raw events to the **Kafka `Raw Events Topic`**.
-
-2. **Validation Service**
-   A Flink job consumes raw events, validates their schema, and routes them accordingly:
-
-   - **`Validated Topic`** for valid data
-   - **`Invalidated Topic`** for invalid data
-
-3. **DataLake and Online Store**
-
-   - **Validated Topic → DataLake (MinIO)**
-     For permanent storage and downstream batch processing.
-   - **Validated Topic → Online Store (Redis)**
-     For real-time feature retrieval.
-
-4. **Data Warehouse (Offline Store)**
-   Orchestrated by **Airflow DAGs**, which:
-   - Ingest raw data from the DataLake
-   - Perform quality checks and transformations
-   - Create dimension, fact, and feature tables
-   - Re-check data quality on the final “gold” tables
+The system comprises four main pipelines—**Data**, **Training**, **Serving**, and **Observability**—alongside a **Dev Environment** and a **Model Registry**.
 
 ---
 
-### 🤼‍♂️ 2. Training Pipeline
+### 1. Data Pipeline
 
-1. **Distributed Training with Ray**
+#### a. Producers & CDC
 
-   - `get_data`: Pulls features from the Data Warehouse
-   - `hyper_parameter_tuning`: Conducts hyperparameter tuning using Ray Tune
-   - `train_final_model`: Trains the final model with the best hyperparameters
+- Multiple producers emit raw events to **Kafka** (`tracking.raw_user_behavior`).
+- A **Debezium-based CDC** service captures and streams changes from PostgreSQL into **Kafka** (`tracking_postgres_cdc.public.events`).
 
-2. **Model Registry**
+#### b. Validation Service (Flink)
 
-   - **MLflow and MinIO** store model weights, metrics, and artifacts.
+- Consumes raw and CDC events from Kafka.
+- Validates schemas, splitting events into:
+  - **Validated Topic** (`tracking.user_behavior.validated`)
+  - **Invalidated Topic** (`tracking.user_behavior.invalid`)
 
-3. **Manual Training Option**
-   - Jupyter notebooks (`notebook/train.ipynb`) allow a custom or ad hoc workflow.
+#### c. DataLake (MinIO)
 
----
+- **Kafka → S3 Sink Connectors** write validated and invalid data to **MinIO**.
+- Ensure no data is lost, aka `EtLT` (Extract, transform, Load, Transform).
+- Ensures permanent storage of raw data, including invalid events for alerting or recovery.
 
-### 🚀 3. Serving Pipeline
+#### d. Data Warehouse (PostgreSQL)
 
-1. **Real-Time Inference**
+- **Airflow DAGs** orchestrate the ETL flow (Bronze → Silver → Gold tables):
+  - Ingest raw data from MinIO.
+  - Perform quality checks and transformations.
+  - Create dimension, fact, and feature tables.
+  - Re-check data quality on final “gold” tables.
 
-   - **Ray Serve** hosts an **XGBoost** model.
-   - Model checkpoints are loaded from the **Model Registry**.
-   - Real-time feature retrieval comes from **Redis**.
-   - Predictions are served to the **Product App** via **NGINX**.
+#### e. Online Store (Redis)
 
-2. **Scalability & Performance**
-   - Ray Serve scales horizontally to handle high-throughput requests.
-   - NGINX acts as a reverse proxy to route traffic efficiently.
-
----
-
-### 🔎 4. Observability
-
-1. **OpenTelemetry Collector**
-   Aggregates telemetry data (metrics, traces, logs) from the Serving Pipeline.
-
-2. **SigNoz**
-   - Receives data exported from the OpenTelemetry Collector.
-   - Provides a centralized dashboard for system health and performance monitoring.
+- Real-time ingestion of features:
+  - **Flink Jobs** or custom Python scripts convert validated events to feature-ready topics.
+  - **Feast** or custom ingestion pipelines populate Redis for low-latency feature retrieval.
 
 ---
 
-### 💻 Dev Environment
+### 2. Training Pipeline
 
-- **Jupyter Notebooks** for data exploration, ad hoc experimentation, and manual model development.
-- Integration with the rest of the pipeline (Data, Training, Serving) ensures an end-to-end experience even in development.
+#### a. Distributed Training with Ray
+
+- **`load_training_data`**: Pulls features from the “gold” tables in the Data Warehouse.
+- **`tune_hyperparameters`**: Uses **Ray Tune** for distributed hyperparameter optimization.
+- **`train_final_model`**: Trains the final model (e.g., XGBoost) using the best hyperparameters.
+
+#### b. Model Registry
+
+- **MLflow + MinIO** to store model artifacts, metrics, and versioned checkpoints.
+- Facilitates model discovery, lineage, and rollout/rollback.
+
+#### c. Manual Training Option
+
+- **Jupyter notebooks** (`notebook/train.ipynb`) provide custom or ad hoc workflows.
+
+---
+
+### 3. Serving Pipeline
+
+#### a. Real-Time Inference (Ray Serve)
+
+- **Ray Serve** hosts the trained model.
+- Model checkpoints loaded from **MLflow** in MinIO.
+- Real-time features fetched from **Redis** (Online Store).
+
+#### b. Feature Retrieval Services
+
+- A dedicated microservice (e.g., **FastAPI**) or Flink job for on-demand feature retrieval.
+- Streams or scheduled updates keep **Redis** current.
+
+#### c. Scalability & Performance
+
+- Ray Serve scales horizontally under heavy workloads.
+- **NGINX** acts as a reverse proxy, routing requests efficiently.
+
+---
+
+### 4. Observability
+
+#### a. OpenTelemetry Collector
+
+- Collects, aggregates, and exports metrics, logs, and traces from various services.
+
+#### b. SigNoz
+
+- Consumes telemetry data from the OpenTelemetry Collector.
+- Offers dashboards and alerting for monitoring the entire pipeline.
+
+#### c. Prometheus & Grafana
+
+- Scrapes and visualizes **Ray Cluster** metrics.
+- Provides insights into resource usage, job status, and cluster health.
+
+---
+
+### Dev Environment
+
+#### a. Jupyter Notebooks
+
+- Facilitates data exploration, rapid prototyping, and debugging.
+- Integrated with the rest of the pipeline for end-to-end local development.
+
+#### b. Docker Compose Services
+
+- Local spins of **Kafka**, **Flink**, **Redis**, **Airflow**, etc.
+- Simplifies debugging and testing by emulating production environments.
+
+---
+
+### Model Registry
+
+#### a. MLflow UI
+
+- Access at `http://localhost:5001`.
+- Stores experiment runs, parameters, metrics, and artifacts.
+
+#### b. MinIO
+
+- Serves as the artifact storage backend for MLflow.
+- Manages versioned model binaries and other metadata.
+
+---
+
+By combining streaming ingestion (**Kafka** + **Flink**), persistent storage (**MinIO** + **PostgreSQL**), orchestration (**Airflow**), distributed training/serving (**Ray**), and observability (**SigNoz**, **Prometheus/Grafana**), **EasyMLOps** provides a robust, modular pipeline—from raw data to real-time predictions at scale.
 
 ---
 
@@ -343,18 +391,110 @@ The model will be versioned in the Model Registry, you can go to the `http://loc
 
 ![MLflow Models](./docs/images/mlflow-models.jpg)
 
+### 📦 Start Online Store
+
+```bash
+make up-online-store
+```
+
+This command will start the Online Store as well as the Serving Pipeline.
+
+Look at the `docker-compose.online-store.yaml` file, you will see 2 services, the `redis` service and the `feature-retrieval` service. The `redis` service is the Online Store, and the `feature-retrieval` service is the Feature Retrieval service.
+
+The `feature-retrieval` service is a Python service that will run the following commands:
+
+```bash
+python setup.py # Setup the feature store
+python materialize_features.py # Materialize the features from Data Warehouse to Redis, highly recommend to run this in a cron job
+python api.py # Start a simple FastAPI app to retrieve the features
+```
+
+To view the Swagger UI, you can go to `http://localhost:8001/docs`.
+
+The `redis` service is a Redis instance that will store the features.
+
+#### Syncing Data from Kafka to Redis
+
+First, we need to start the `validated_events_to_features` job, this job will consume the `tracking.user_behavior.validated` topic, process the data, and store it in the `model.features.ready` topic.
+
+```bash
+make validated_events_to_features
+```
+
+![Validated Events to Features Job](./docs/images/validated-events-to-features-job.jpg)
+
+Then, we need to start the `kafka_to_feast_online_store` job, this job will consume the `model.features.ready` topic, process the data, and store it in the Redis Online Store.
+
+```bash
+make kafka_to_feast_online_store
+```
+
+![Kafka to Feast Online Store Job](./docs/images/kafka-to-feast-online-store-job-log.jpg)
+
+This command will cd to `src/feature_stores`, create a virtual environment, activate it, install the dependencies, and run the `ingest_stream_to_online_store.py` script. This script will consume the `tracking.user_behavior.validated` topic, process the data, and store it in the `model.features.ready` topic.
+
+Here is an example of the record in the `model.features.ready` topic:
+
+```json
+{
+  "event_timestamp": "2019-10-01 02:40:47 UTC",
+  "user_id": 555464681,
+  "product_id": 2402894,
+  "user_session": "10d6b1d6-951f-4e5a-a650-eb567c9ed3a1",
+  "event_type": "view",
+  "category_code": "appliances.kitchen.hood",
+  "price": 162.54,
+  "brand": "zorg",
+  "category_code_level1": "appliances",
+  "category_code_level2": "kitchen",
+  "processed_at": "2025-01-07T13:06:47.930295"
+}
+```
+
 ### 🚀 Start Serving Pipeline
 
 ```bash
 make up-serving
 ```
 
-## 💡 Contributing
+This command will start the Serving Pipeline. Note that we did not portfward the `8000` port in the `docker-compose.serving.yaml` file, but we just expose it. The reason is that we use Ray Serve, and the job will be submitted to the Ray Cluster. That is the reason why you see the port `8000` in the `docker-compose.serving.ray` file instead of the `docker-compose.serving.yaml` file.
 
-Contributions are welcome! Feel free to open issues or submit pull requests to improve the Data Pipeline, Training Pipeline, Serving Pipeline, or Observability stack.
+![Serving Pipeline](./docs/images/serving-pipeline-swagger-ui.jpg)
+
+### 🔎 Start Observability
+
+#### Signoz
+
+```bash
+make up-observability
+```
+
+This command will start the Observability Pipeline. This is a SigNoz instance that will receive the data from the OpenTelemetry Collector. Go to `http://localhost:3301/` and you should see the SigNoz dashboard.
+
+![Observability](./docs/images/signoz-1.jpg)
+
+![Observability](./docs/images/signoz-2.jpg)
+
+#### Prometheus and Grafana
+
+To see the Ray Cluster information, you can go to `http://localhost:3009/` and you should see the Grafana dashboard.
+
+![Grafana](./docs/images/grafana.jpg)
+
+### NGINX
+
+```bash
+make up-nginx
+```
+
+This command will start the NGINX Proxy Manager, you can go to `http://localhost:81/` and you should see the NGINX Proxy Manager UI. The default user and password is `admin@example.com:changeme`. Then you can setup the reverse proxy for the Ray Dashboard, MLflow, Airflow, and more. For SSL, you can use the Let's Encrypt, and for domain, you can use DuckDNS.
+
+![NGINX Proxy Manager 1](./docs/images/nginx-proxy-manager-1.jpg)
+
+![NGINX Proxy Manager 2](./docs/images/nginx-proxy-manager-2.jpg)
 
 ---
 
 ## 📃 License
 
-This project is provided under an open-source license. See the [LICENSE](LICENSE) file for details.
+This project is provided under an MIT license. See the [LICENSE](LICENSE) file for details.

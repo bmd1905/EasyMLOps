@@ -63,7 +63,7 @@ class KafkaToFeastOnlineStoreJob(FlinkJob):
             "KAFKA_BOOTSTRAP_SERVERS", "localhost:9092"
         )
         self.kafka_feature_topic = os.getenv(
-            "KAFKA_FEATURES_TOPIC", "feature-events-topic"
+            "KAFKA_FEATURES_TOPIC", "model.features.ready"
         )
 
         # Session management
@@ -314,7 +314,7 @@ class CustomSparkKafkaProcessor(SparkKafkaProcessor):
                 os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092"),
             )
             .option(
-                "subscribe", os.getenv("KAFKA_FEATURES_TOPIC", "feature-events-topic")
+                "subscribe", os.getenv("KAFKA_FEATURES_TOPIC", "model.features.ready")
             )
             .option("startingOffsets", "latest")
             .load()

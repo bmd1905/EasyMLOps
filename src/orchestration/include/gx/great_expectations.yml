@@ -61,6 +61,7 @@ datasources:
       module_name: great_expectations.execution_engine
     data_connectors:
       default_runtime_connector:
+        name: default_runtime_connector
         class_name: RuntimeDataConnector
         module_name: great_expectations.datasource.data_connector
         batch_identifiers:
@@ -73,7 +74,6 @@ datasources:
       module_name: great_expectations.execution_engine
     data_connectors:
       default_runtime_connector:
-        name: default_runtime_connector
         class_name: RuntimeDataConnector
         module_name: great_expectations.datasource.data_connector
         batch_identifiers:

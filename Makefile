@@ -49,7 +49,7 @@ up-orchestration: up-data-lake up-dwh up-ray-cluster up-model-registry up-grafan
 up-online-store:
 	docker compose -f $(ONLINE_STORE_COMPOSE_FILE) up -d --build
 
-up-serving: up-online-store
+up-serving:
 	docker compose -f $(SERVING_COMPOSE_FILE) up -d --build
 
 up-nginx:
@@ -205,7 +205,7 @@ alert_invalid_events:
 	uv run $(PYTHON) -m src.streaming.main alert_invalid_events
 
 kafka_to_feast_online_store:
-	cd src/feature_stores && ./run.sh && . .venv/bin/activate && python ingest_stream_to_online_store.pyi
+	cd src/feature_stores && ./run.sh && . .venv/bin/activate && python ingest_stream_to_online_store.py
 
 # ------------------------------------------ Help Command ------------------------------------------
 help:

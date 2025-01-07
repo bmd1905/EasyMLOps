@@ -108,7 +108,7 @@ class ValidatedEventsToFeaturesJob(FlinkJob):
         self.input_topic = os.getenv(
             "KAFKA_VALID_TOPIC", "tracking.user_behavior.validated"
         )
-        self.output_topic = os.getenv("KAFKA_FEATURES_TOPIC", "feature-events-topic")
+        self.output_topic = os.getenv("KAFKA_FEATURES_TOPIC", "model.features.ready")
         self.group_id = os.getenv("KAFKA_GROUP_ID", "flink-feature-group")
         self.bootstrap_servers = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
 
