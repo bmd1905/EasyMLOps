@@ -381,7 +381,7 @@ After starting the job, you can go to `localhost:9021` and you should see the `t
 make up-data-lake
 ```
 
-This is a MinIO instance that will store both the validated and invalidated events, ensuring no data is lost. MinIO is compatible with the Amazon S3 API, Google Cloud Storage, and Azure Blob Storage, so you can use any S3 client to interact with it. I have already created a simple alert to monitor the invalidated events in `src/streaming/jobs/alert_invalid_events_job.py`. Just run `alert_invalid_events` to see the alert in action.
+This is a MinIO instance that will store both the validated and invalidated events, ensuring no data is lost. MinIO is compatible with the Amazon S3 API, Google Cloud Storage, and Azure Blob Storage, so you can switch to another S3-compatible storage easily. I have already created a simple alert to monitor the invalidated events in `src/streaming/jobs/alert_invalid_events_job.py`. Just run `make alert_invalid_events` to see the alert in action.
 
 In order to sync the data from the `tracking.user_behavior.validated` and `tracking.user_behavior.invalid` topics to the MinIO, we need to deploy the S3 connector.
 
@@ -389,9 +389,9 @@ In order to sync the data from the `tracking.user_behavior.validated` and `track
 make deploy_s3_connector
 ```
 
-Go to `localhost:9021` (default user and password is `minioadmin:minioadmin`) at the `Connect` tab and you should see new connectors called `minio-validated-sink` and `minio-invalidated-sink`.
+Go to `localhost:9021` at the `Connect` tab and you should see new connectors called `minio-validated-sink` and `minio-invalidated-sink`.
 
-To see the MinIO UI, you can go to `localhost:9001`. There are 2 buckets, `validated-events-bucket` and `invalidated-events-bucket`, you can go to each bucket and you should see the events being synced.
+To see the MinIO UI, you can go to `localhost:9001` (default user and password is `minioadmin:minioadmin`). There are 2 buckets, `validated-events-bucket` and `invalidated-events-bucket`, you can go to each bucket and you should see the events being synced.
 
 ![MinIO Buckets](./docs/images/minio-buckets.jpg)
 
@@ -415,11 +415,11 @@ This will start the Airflow service and the other services that are needed for t
 
 **Relevant URLs:**
 
-- MinIO UI: `localhost:9001` 🖥️
-- Airflow UI: `localhost:8080` (user/password: `airflow:airflow`) 🔗
-- Ray Dashboard: `localhost:8265` 📊
-- Grafana: `localhost:3009` 📉
-- MLflow UI: `localhost:5001` 🖥️
+- 🖥️ MinIO UI: `localhost:9001` (user/password: `minioadmin:minioadmin`)
+- 🔗 Airflow UI: `localhost:8080` (user/password: `airflow:airflow`)
+- 📊 Ray Dashboard: `localhost:8265`
+- 📉 Grafana: `localhost:3009` (user/password: `admin:admin`)
+- 🖥️ MLflow UI: `localhost:5001`
 
 ### Data and Training Pipeline
 
@@ -493,8 +493,6 @@ The model will be versioned in the Model Registry, you can go to `localhost:5001
 make up-online-store
 ```
 
-This command will start the Online Store as well as the Serving Pipeline.
-
 Look at the `docker-compose.online-store.yaml` file, you will see 2 services, the `redis` service and the `feature-retrieval` service. The `redis` service is the Online Store, and the `feature-retrieval` service is the Feature Retrieval service.
 
 The `feature-retrieval` service is a Python service that will run the following commands:
@@ -506,8 +504,6 @@ python api.py # Start a simple FastAPI app to retrieve the features
 ```
 
 To view the Swagger UI, you can go to `localhost:8001/docs`.
-
-The `redis` service is a Redis instance that will store the features.
 
 #### 🔄 Syncing Data from Kafka to Redis
 
@@ -573,7 +569,7 @@ This command will start the Observability Pipeline. This is a SigNoz instance th
 
 #### 📉 Prometheus and Grafana
 
-To see the Ray Cluster information, you can go to `localhost:3009` and you should see the Grafana dashboard.
+To see the Ray Cluster information, you can go to `localhost:3009` (user/password: `admin:admin`) and you should see the Grafana dashboard.
 
 ![Grafana](./docs/images/grafana.jpg)
 
@@ -583,7 +579,24 @@ To see the Ray Cluster information, you can go to `localhost:3009` and you shoul
 make up-nginx
 ```
 
-This command will start the NGINX Proxy Manager, you can go to `localhost:81` and you should see the NGINX Proxy Manager UI. The default user and password is `admin@example.com:changeme`. Then you can setup the reverse proxy for the Ray Dashboard, MLflow, Airflow, and more. For SSL, you can use Let's Encrypt, and for domain, you can use DuckDNS.
+This command will start the NGINX Proxy Manager, which provides a user-friendly interface for configuring reverse proxies and SSL certificates. Access the UI at `localhost:81` using the default credentials:
+
+- Username: `admin@example.com`
+- Password: `changeme`
+
+Key configuration options include:
+
+- SSL certificate management using:
+  - Let's Encrypt (free, automated)
+  - Cloudflare SSL
+- Free dynamic DNS providers:
+  - [DuckDNS](https://www.duckdns.org/)
+  - [YDNS](https://ydns.io/)
+  - [FreeDNS](https://freedns.afraid.org/)
+  - [Dynu](https://www.dynu.com/)
+- Setting up reverse proxies for services like Signoz, Ray Dashboard, MLflow, and Grafana.
+
+**Security Tip**: Change the default password immediately after first login to protect your proxy configuration.
 
 ![NGINX Proxy Manager 1](./docs/images/nginx-proxy-manager-1.jpg)
 
