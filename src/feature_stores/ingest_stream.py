@@ -314,7 +314,7 @@ try:
     logger.debug(f"Bootstrap servers: {KAFKA_BOOTSTRAP_SERVERS}")
     logger.debug(f"Topic: {KAFKA_FEATURE_TOPIC}")
 
-    query = processor.ingest_stream_feature_view(PushMode.ONLINE)
+    query = processor.ingest_stream_feature_view(PushMode.ONLINE_AND_OFFLINE)
     query.awaitTermination()
 
 except Exception as e:

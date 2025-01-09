@@ -204,8 +204,8 @@ deploy_s3_connector:
 alert_invalid_events:
 	uv run $(PYTHON) -m src.streaming.main alert_invalid_events
 
-kafka_to_feast_online_store:
-	cd src/feature_stores && ./run.sh && . .venv/bin/activate && python ingest_stream_to_online_store.py
+ingest_stream:
+	cd src/feature_stores && ./run.sh && . .venv/bin/activate && python ingest_stream.py
 
 # ------------------------------------------ Help Command ------------------------------------------
 help:

@@ -515,10 +515,10 @@ make validated_events_to_features
 
 ![Validated Events to Features Job](./docs/images/validated-events-to-features-job.jpg)
 
-Then, we need to start the `kafka_to_feast_online_store` job, this job will consume the `model.features.ready` topic, process the data, and store it in the Redis Online Store.
+Then, we need to start the `ingest_stream` job, this job will consume the `model.features.ready` topic, process the data, and store it in the Redis Online Store.
 
 ```bash
-make kafka_to_feast_online_store
+make ingest_stream
 ```
 
 ![Kafka to Feast Online Store Job Log](./docs/images/kafka-to-feast-online-store-job-log.jpg)
