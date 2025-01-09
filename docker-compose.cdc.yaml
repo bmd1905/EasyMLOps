@@ -2,7 +2,6 @@ services:
   # CDC platform to capture changes in DB
   # and stream them to Kafka
   debezium:
-    platform: linux/x86_64
     image: debezium/connect:1.9
     container_name: cdc-debezium
     depends_on:
@@ -43,7 +42,6 @@ services:
 
   # Debezium UI
   debezium-ui:
-    platform: linux/x86_64
     image: debezium/debezium-ui:latest
     container_name: debezium-ui
     hostname: debezium-ui
@@ -61,7 +59,6 @@ services:
   cdc-postgresql:
     # Set wal_level from replica (default) to logical
     # so that Debezium can capture change
-    platform: linux/x86_64
     image: postgres:latest
     command: ["postgres", "-c", "wal_level=logical"]
     container_name: cdc-postgresql
