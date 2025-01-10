@@ -195,9 +195,6 @@ producer:
 schema_validation:
 	uv run $(PYTHON) -m src.streaming.main schema_validation
 
-validated_events_to_features:
-	uv run $(PYTHON) -m src.streaming.main validated_events_to_features
-
 deploy_s3_connector:
 	uv run $(PYTHON) -m src.streaming.connectors.deploy_s3_connector
 

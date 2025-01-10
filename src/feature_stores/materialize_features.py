@@ -23,7 +23,7 @@ def materialize_features():
         store.materialize(
             start_date=start_date,
             end_date=end_date,
-            feature_views=["user_features", "product_features"],
+            feature_views=["validated_events_stream"],
         )
 
         logger.info("Successfully materialized features")

@@ -19,10 +19,6 @@ def get_available_jobs() -> Dict[str, Type[FlinkJob]]:
             "src.streaming.jobs.alert_invalid_events_job",
             fromlist=["AlertInvalidEventsJob"],
         ).AlertInvalidEventsJob,
-        "validated_events_to_features": lambda: __import__(
-            "src.streaming.jobs.validated_events_to_features_job",
-            fromlist=["ValidatedEventsToFeaturesJob"],
-        ).ValidatedEventsToFeaturesJob,
     }
 
 
