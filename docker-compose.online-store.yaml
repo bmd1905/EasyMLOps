@@ -20,12 +20,7 @@ services:
       dockerfile: Dockerfile
       context: src/feature_stores
     container_name: feature-retrieval
-    command:
-      [
-        "sh",
-        "-c",
-        "python setup.py && python materialize_features.py && python api.py",
-      ]
+    command: ["sh", "-c", "python api.py"]
     ports:
       - "8001:8001"
     depends_on:
