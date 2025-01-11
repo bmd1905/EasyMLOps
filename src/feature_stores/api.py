@@ -29,9 +29,9 @@ async def get_features(request: FeatureRequest):
             "streaming_features:event_weekday",
             "streaming_features:is_purchased",
             "streaming_features:brand",
-            "product_features:price",
-            "product_features:category_code_level1",
-            "product_features:category_code_level2",
+            "streaming_features:price",
+            "streaming_features:category_code_level1",
+            "streaming_features:category_code_level2",
         ],
         entity_rows=[{"user_id": request.user_id, "product_id": request.product_id}],
     ).to_dict()

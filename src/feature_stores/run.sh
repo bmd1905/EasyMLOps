@@ -31,7 +31,3 @@ while ! pg_isready -h ${POSTGRES_HOST:-localhost} -p ${POSTGRES_PORT:-5433}; do
 done
 
 echo "PostgreSQL is ready!"
-echo "Setting up feature store..."
-
-# Initialize feature store
-python setup.py

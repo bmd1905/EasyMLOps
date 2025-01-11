@@ -9,7 +9,7 @@ from feast.infra.offline_stores.contrib.postgres_offline_store.postgres_source i
 # Batch source for validated events (historical data)
 validated_events_batch = PostgreSQLSource(
     name="validated_events_batch",
-    query="SELECT * FROM feature_store.ml_purchase_prediction WHERE 1=1",
+    query="SELECT * FROM feature_store.streaming_features WHERE 1=1",
     timestamp_field="event_timestamp",
 )
 
@@ -26,17 +26,19 @@ validated_events_stream = KafkaSource(
             "type": "record",
             "name": "feature_event",
             "fields": [
-                {"name": "event_timestamp", "type": "string"},
                 {"name": "user_id", "type": "int"},
                 {"name": "product_id", "type": "int"},
-                {"name": "user_session", "type": "string"},
+                {"name": "event_timestamp", "type": "string"},
                 {"name": "event_type", "type": "string"},
-                {"name": "category_code", "type": "string"},
                 {"name": "price", "type": "float"},
-                {"name": "brand", "type": "string"},
+                {"name": "category_code", "type": "string"},
                 {"name": "category_code_level1", "type": "string"},
                 {"name": "category_code_level2", "type": "string"},
-                {"name": "processed_at", "type": "string"}
+                {"name": "brand", "type": "string"},
+                {"name": "activity_count", "type": "int"},
+                {"name": "event_weekday", "type": "int"},
+                {"name": "is_purchased", "type": "int"},
+                {"name": "user_session", "type": "string"}
             ]
         }
         """

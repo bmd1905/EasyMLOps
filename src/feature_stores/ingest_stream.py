@@ -15,6 +15,7 @@ from feast.infra.contrib.spark_kafka_processor import (
     SparkProcessorConfig,
 )
 from loguru import logger
+from offline_write_batch import PostgreSQLOfflineWriter
 from pyspark.sql import SparkSession, Window
 from pyspark.sql.types import (
     ArrayType,
@@ -38,6 +39,14 @@ logger.add("logs/ingest_stream.log", level="DEBUG")
 # Kafka environment variables
 KAFKA_BOOTSTRAP_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
 KAFKA_INPUT_TOPIC = os.getenv("KAFKA_INPUT_TOPIC", "tracking.user_behavior.validated")
+
+# PostgreSQL environment variables
+POSTGRES_HOST = os.getenv("POSTGRES_HOST", "localhost")
+POSTGRES_PORT = int(os.getenv("POSTGRES_PORT", "5433"))
+POSTGRES_DB = os.getenv("POSTGRES_DB", "dwh")
+POSTGRES_SCHEMA = os.getenv("POSTGRES_SCHEMA", "feature_store")
+POSTGRES_USER = os.getenv("POSTGRES_USER", "dwh")
+POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "dwh")
 
 # Schema for the nested "payload"
 PAYLOAD_SCHEMA = StructType(
@@ -116,6 +125,16 @@ spark = (
     .getOrCreate()
 )
 
+# Initialize PostgreSQL writer after SparkSession initialization
+postgres_writer = PostgreSQLOfflineWriter(
+    host=POSTGRES_HOST,
+    port=POSTGRES_PORT,
+    database=POSTGRES_DB,
+    db_schema=POSTGRES_SCHEMA,
+    user=POSTGRES_USER,
+    password=POSTGRES_PASSWORD,
+)
+
 # Initialize the FeatureStore
 store = FeatureStore(repo_path=".")
 
@@ -125,10 +144,51 @@ session_last_seen = defaultdict(datetime.now)
 SESSION_TIMEOUT = timedelta(hours=24)
 
 
+def initialize_feature_tables():
+    """Initialize feature tables in PostgreSQL if they don't exist."""
+    try:
+        # Define feature schema based on your feature view
+        feature_names = [
+            "price",
+            "brand",
+            "category_code_level1",
+            "category_code_level2",
+            "event_weekday",
+            "activity_count",
+            "is_purchased",
+        ]
+
+        feature_types = [
+            "float64",  # price
+            "string",  # brand
+            "string",  # category_code_level1
+            "string",  # category_code_level2
+            "int32",  # event_weekday
+            "int64",  # activity_count
+            "int32",  # is_purchased
+        ]
+
+        entity_names = ["user_id", "product_id", "user_session", "event_timestamp"]
+        entity_types = ["int64", "int64", "string", "datetime64[ns]"]
+
+        # Create table for streaming features
+        postgres_writer.create_table_from_features(
+            table_name="streaming_features",
+            feature_names=feature_names,
+            feature_types=feature_types,
+            entity_names=entity_names,
+            entity_types=entity_types,
+        )
+        logger.info("Successfully initialized feature tables in PostgreSQL")
+
+    except Exception as e:
+        logger.error(f"Failed to initialize feature tables: {str(e)}")
+        raise
+
+
 def preprocess_fn(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Transform validated events from the raw Kafka payload
-    into a DataFrame of features required by 'streaming_features'.
+    Transform validated events and write to both online and offline stores.
     """
     try:
         if df.empty:
@@ -242,6 +302,17 @@ def preprocess_fn(df: pd.DataFrame) -> pd.DataFrame:
                 df[col_name] = df[col_name].astype(dtype)
 
         logger.info(f"Preprocessing produced {len(df)} rows")
+
+        # After all preprocessing is done, write to offline store
+        if not df.empty:
+            postgres_writer.write_batch(
+                df=df,
+                table_name="streaming_features",
+                if_exists="append",
+                chunk_size=10000,
+            )
+            logger.info(f"Wrote {len(df)} rows to offline store")
+
         return df
 
     except Exception as e:
@@ -285,9 +356,6 @@ class ValidatedEventsProcessor(SparkKafkaProcessor):
             F.col("data.metadata.processed_at"),
         )
 
-        # Change to ONLINE only mode since OFFLINE writes are not supported
-        self.push_mode = PushMode.ONLINE
-
         return parsed_df
 
 
@@ -319,6 +387,9 @@ def run_materialization():
 
 if __name__ == "__main__":
     try:
+        # Initialize feature tables in PostgreSQL
+        initialize_feature_tables()
+
         # Retrieve your streaming Feature View definition from the repo
         sfv = store.get_stream_feature_view("streaming_features")
 
