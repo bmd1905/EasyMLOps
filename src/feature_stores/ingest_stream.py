@@ -215,64 +215,86 @@ def preprocess_fn(df: pd.DataFrame) -> pd.DataFrame:
             logger.info("No valid records in this batch.")
             return pd.DataFrame(columns=df.columns)
 
-        # If needed, parse nested 'payload' columns
-        if "payload" in df.columns:
-            for field in [
-                "event_time",
-                "event_type",
-                "product_id",
-                "category_id",
-                "category_code",
-                "brand",
-                "price",
-                "user_id",
-                "user_session",
-            ]:
-                df[field] = df["payload"].apply(lambda x: x.get(field) if x else None)
+        # Convert to Spark DataFrame
+        spark_df = spark.createDataFrame(df)
 
         # Ensure we have a proper event_timestamp column
-        if "event_time" in df.columns:
-            df.rename(columns={"event_time": "event_timestamp"}, inplace=True)
-        if "event_timestamp" not in df.columns:
-            logger.error("Missing column: event_timestamp")
-            return pd.DataFrame(columns=df.columns)
+        if "event_time" in spark_df.columns:
+            spark_df = spark_df.withColumnRenamed("event_time", "event_timestamp")
 
-        # Convert event_timestamp to datetime
-        df["event_timestamp"] = pd.to_datetime(
-            df["event_timestamp"],
-            format="%Y-%m-%d %H:%M:%S UTC",  # Adjust if needed
-            errors="coerce",
+        # Convert event_timestamp to timestamp and handle invalid timestamps
+        spark_df = spark_df.withColumn(
+            "event_timestamp",
+            F.when(
+                F.col("event_timestamp").contains("UTC"),
+                F.to_timestamp(
+                    F.regexp_replace(F.col("event_timestamp"), " UTC$", ""),
+                    "yyyy-MM-dd HH:mm:ss",
+                ),
+            ).otherwise(
+                F.to_timestamp(F.col("event_timestamp"), "yyyy-MM-dd HH:mm:ss")
+            ),
         )
-        df["event_timestamp"] = df["event_timestamp"].dt.tz_localize(None)
 
-        # Convert to Spark DataFrame for window-based activity_count
-        spark_df = spark.createDataFrame(df)
+        # Drop rows with invalid timestamps
+        spark_df = spark_df.filter(F.col("event_timestamp").isNotNull())
 
         # Window: activity_count by user_session
         window_spec = Window.partitionBy("user_session")
         spark_df = spark_df.withColumn("activity_count", F.count("*").over(window_spec))
 
-        # Convert Spark DF back to Pandas
-        df = spark_df.toPandas()
-
         # Fill missing fields with defaults
-        df["price"] = df["price"].fillna(0.0)
-        df["brand"] = df["brand"].fillna("")
-        df["category_code"] = df["category_code"].fillna("")
-        df["event_type"] = df["event_type"].fillna("")
+        spark_df = spark_df.fillna(
+            {"price": 0.0, "brand": "", "category_code": "", "event_type": ""}
+        )
 
-        # Split category_code into two levels
-        cat_split = df["category_code"].str.split(".", n=1, expand=True).fillna("")
-        df["category_code_level1"] = cat_split[0]
-        df["category_code_level2"] = cat_split[1]
+        # Split category_code into two levels using split and regexp_replace
+        spark_df = spark_df.withColumn(
+            "category_code_level1",
+            F.regexp_replace(
+                F.split(F.col("category_code"), "\\.", 2).getItem(0), "null", ""
+            ),
+        ).withColumn(
+            "category_code_level2",
+            F.regexp_replace(
+                F.split(F.col("category_code"), "\\.", 2).getItem(1), "null", ""
+            ),
+        )
 
-        # Calculate weekday
-        df["event_weekday"] = df["event_timestamp"].dt.weekday
+        # Calculate weekday from timestamp
+        spark_df = spark_df.withColumn(
+            "event_weekday", F.dayofweek(F.col("event_timestamp")) - 1
+        )
 
         # Derived feature: is_purchased
-        df["is_purchased"] = (df["event_type"].str.lower() == "purchase").astype(int)
+        spark_df = spark_df.withColumn(
+            "is_purchased",
+            F.when(F.lower(F.col("event_type")) == "purchase", 1).otherwise(0),
+        )
 
-        # Final columns for pushing
+        # Cast columns to correct types
+        spark_df = (
+            spark_df.withColumn("user_id", F.col("user_id").cast("long"))
+            .withColumn("product_id", F.col("product_id").cast("long"))
+            .withColumn("price", F.col("price").cast("double"))
+            .withColumn("event_weekday", F.col("event_weekday").cast("integer"))
+            .withColumn("activity_count", F.col("activity_count").cast("long"))
+            .withColumn("is_purchased", F.col("is_purchased").cast("integer"))
+        )
+
+        # Fill nulls with -1 for numeric columns
+        numeric_cols = [
+            "user_id",
+            "product_id",
+            "price",
+            "event_weekday",
+            "activity_count",
+            "is_purchased",
+        ]
+        for col in numeric_cols:
+            spark_df = spark_df.fillna({col: -1})
+
+        # Select final columns
         feature_cols = [
             "event_timestamp",
             "user_id",
@@ -286,20 +308,10 @@ def preprocess_fn(df: pd.DataFrame) -> pd.DataFrame:
             "activity_count",
             "is_purchased",
         ]
-        df = df[feature_cols]
+        spark_df = spark_df.select(feature_cols)
 
-        # Cast to correct dtypes
-        type_map = {
-            "user_id": "int64",
-            "product_id": "int64",
-            "price": "float64",
-            "event_weekday": "int64",
-            "activity_count": "int64",
-            "is_purchased": "int64",
-        }
-        for col_name, dtype in type_map.items():
-            if col_name in df.columns:
-                df[col_name] = df[col_name].astype(dtype)
+        # Convert back to pandas
+        df = spark_df.toPandas()
 
         logger.info(f"Preprocessing produced {len(df)} rows")
 
