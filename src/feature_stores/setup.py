@@ -5,6 +5,7 @@ from entities import product, user
 from feast import FeatureStore
 from features_view import streaming_features
 from loguru import logger
+from setup_db import init_database
 
 
 def setup_feature_store():
@@ -12,6 +13,9 @@ def setup_feature_store():
     try:
         # Load environment variables
         load_dotenv()
+
+        # Initialize database
+        init_database()
 
         # Get the feature store directory
         repo_path = Path(__file__).parent

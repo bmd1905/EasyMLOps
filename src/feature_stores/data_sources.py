@@ -9,7 +9,7 @@ from feast.infra.offline_stores.contrib.postgres_offline_store.postgres_source i
 # Batch source for validated events (historical data)
 validated_events_batch = PostgreSQLSource(
     name="validated_events_batch",
-    query="SELECT * FROM dwh.vw_ml_purchase_prediction WHERE 1=1",
+    query="SELECT * FROM feature_store.ml_purchase_prediction WHERE 1=1",
     timestamp_field="event_timestamp",
 )
 

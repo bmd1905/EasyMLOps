@@ -29,10 +29,9 @@ def init_database():
         cursor = conn.cursor()
 
         # Read and execute SQL initialization script
-        sql_path = Path(__file__).parent / "sql"
-        for file in sql_path.glob("*.sql"):
-            with open(file, "r") as f:
-                init_sql = f.read()
+        sql_path = Path(__file__).parent / "sql" / "init_db.sql"
+        with open(sql_path, "r") as f:
+            init_sql = f.read()
 
             cursor.execute(init_sql)
 
@@ -46,7 +45,3 @@ def init_database():
     finally:
         if "conn" in locals():
             conn.close()
-
-
-if __name__ == "__main__":
-    init_database()

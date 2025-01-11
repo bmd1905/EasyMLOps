@@ -33,5 +33,5 @@ done
 echo "PostgreSQL is ready!"
 echo "Setting up feature store..."
 
-python setup_db.py
+# Initialize feature store
 python setup.py

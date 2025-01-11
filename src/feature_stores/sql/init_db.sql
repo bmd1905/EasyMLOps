@@ -1,11 +1,11 @@
 -- Create schema if not exists
-CREATE SCHEMA IF NOT EXISTS dwh;
+CREATE SCHEMA IF NOT EXISTS feature_store;
 
 --- Drop views if exists
-DROP VIEW IF EXISTS dwh.vw_ml_purchase_prediction;
+DROP VIEW IF EXISTS feature_store.ml_purchase_prediction;
 
 -- Create view for ML purchase prediction
-CREATE OR REPLACE VIEW dwh.vw_ml_purchase_prediction AS
+CREATE OR REPLACE VIEW feature_store.ml_purchase_prediction AS
 SELECT
     user_id,
     product_id,
@@ -34,3 +34,25 @@ FROM (
         ''::text as user_session
     WHERE FALSE
 ) t;
+
+-- Create user entity table
+CREATE TABLE IF NOT EXISTS feature_store.entity_user (
+    user_id BIGINT PRIMARY KEY,
+    created_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Create product entity table
+CREATE TABLE IF NOT EXISTS feature_store.entity_product (
+    product_id BIGINT PRIMARY KEY,
+    created_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Add table for offline store if not exists
+CREATE TABLE IF NOT EXISTS feature_store.offline_store (
+    entity_key VARCHAR(255),
+    feature_name VARCHAR(255),
+    value JSONB,
+    event_timestamp TIMESTAMP,
+    created_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (entity_key, feature_name, event_timestamp)
+);
