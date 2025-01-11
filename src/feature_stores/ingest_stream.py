@@ -26,10 +26,8 @@ from pyspark.sql.types import (
     StructType,
 )
 
-# Disable specific warnings
-warnings.filterwarnings("ignore", category=RuntimeWarning)
-warnings.filterwarnings("ignore", category=DeprecationWarning)
-warnings.filterwarnings("ignore", category=FutureWarning)
+# Ignore all warnings
+warnings.filterwarnings("ignore")
 
 # Set up logging
 logger.remove()
