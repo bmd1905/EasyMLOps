@@ -339,19 +339,24 @@ Here is an example of the message's value in the `tracking.raw_user_behavior` to
 }
 ```
 
-#### 🔄 Start CDC
+#### 🔄 Start CDC (2)
 
 ```bash
 make up-cdc
 ```
 
-Next, we start the CDC service. This Docker Compose file contains:
+Next, we start the CDC (Change Data Capture) service using Docker Compose. This setup includes the following components:
 
-- Debezium
-- PostgreSQL db
-- A Python service that registers the connector, creates the table, and inserts the data into PostgreSQL.
+- Debezium: Monitors the Backend DB for any changes (inserts, updates, deletes) and captures those changes.
+- PostgreSQL: The database where the changes are being monitored.
+- A Python service: Registers the connector, creates the table, and inserts the data into PostgreSQL.
 
-The data automatically syncs from PostgreSQL to the `tracking_postgres_cdc.public.events` topic. To confirm, go to the `Connect` tab in the Kafka UI; you should see a connector called `cdc-postgresql`.
+Steps involved:
+
+- Debezium monitors the Backend DB for any changes. (2.1)
+- Debezium captures these changes and pushes them to the Raw Events Topic in the message broker. (2.2)
+
+The data is automatically synced from PostgreSQL to the `tracking_postgres_cdc.public.events` topic. To confirm this, go to the `Connect` tab in the Kafka UI; you should see a connector named `cdc-postgresql`.
 
 ![Kafka Connectors](./docs/images/kafka-connectors.jpg)
 
@@ -375,31 +380,52 @@ After starting the job, you can go to `localhost:9021` and you should see the `t
 
 ![Kafka Topics](./docs/images/kafka-topic-schema-validation.jpg)
 
-### ☁️ Start Data Lake
+### 🔄 Transformation Job (4)
+
+First, we need to start the Data Warehouse and the Online Store.
 
 ```bash
-make up-data-lake
+make up-dwh
+make up-online-store
 ```
 
-This is a MinIO instance that will store both the validated and invalidated events, ensuring no data is lost. MinIO is compatible with the Amazon S3 API, Google Cloud Storage, and Azure Blob Storage, so you can switch to another S3-compatible storage easily. I have already created a simple alert to monitor the invalidated events in `src/streaming/jobs/alert_invalid_events_job.py`. Just run `make alert_invalid_events` to see the alert in action.
+#### 📦 Data Warehouse
 
-In order to sync the data from the `tracking.user_behavior.validated` and `tracking.user_behavior.invalid` topics to the MinIO, we need to deploy the S3 connector.
+The Data Warehouse is just a **PostgreSQL** instance.
+
+#### 📦 Online Store
+
+The Online Store is a **Redis** instance.
+
+Look at the `docker-compose.online-store.yaml` file, you will see 2 services, the `redis` service and the `feature-retrieval` service. The `redis` service is the Online Store, and the `feature-retrieval` service is the Feature Retrieval service.
+
+The `feature-retrieval` service is a Python service that will run the following commands:
 
 ```bash
-make deploy_s3_connector
+python api.py # Start a simple FastAPI app to retrieve the features
 ```
 
-Go to `localhost:9021` at the `Connect` tab and you should see new connectors called `minio-validated-sink` and `minio-invalidated-sink`.
+To view the Swagger UI, you can go to `localhost:8001/docs`. But before that, you need to run the `ingest_stream` job.
 
-To see the MinIO UI, you can go to `localhost:9001` (default user and password is `minioadmin:minioadmin`). There are 2 buckets, `validated-events-bucket` and `invalidated-events-bucket`, you can go to each bucket and you should see the events being synced.
+#### 🔄 Spark Streaming Job
 
-![MinIO Buckets](./docs/images/minio-buckets.jpg)
+Then, we need to start the transformation job.
 
-Each record in buckets is a JSON file, you can click on the file and you should see the event.
+```bash
+make ingest_stream
+```
 
-![MinIO Record](./docs/images/minio-record.jpg)
+This is a **Spark Streaming** job that consumes events from the `tracking.user_behavior.validated` topic. It transforms raw user behavior data into structured machine learning features, focusing on session-based metrics and purchase behavior. The transformed data is then **pushed to both online and offline feature stores**, enabling real-time and batch feature serving for ML models. Periodically, the data is materialized to the online store.
 
-### 🔄 Start Orchestration
+The terminal will look like this:
+
+![Spark Streaming Job](./docs/images/spark-streaming-job.jpg)
+
+Beside that, you can use any tool to visualize the offline store, for example, you can use `DataGrip` to connect to the `dwh` database and you should see the `feature_store` schema.
+
+![DataGrip Offline Store](./docs/images/data-grip-offline-store.jpg)
+
+### 🔄 Data and Training Pipeline (5 & 6)
 
 ```bash
 make up-orchestration
@@ -415,55 +441,76 @@ This will start the Airflow service and the other services that are needed for t
 
 **Relevant URLs:**
 
-- 🖥️ MinIO UI: `localhost:9001` (user/password: `minioadmin:minioadmin`)
 - 🔗 Airflow UI: `localhost:8080` (user/password: `airflow:airflow`)
 - 📊 Ray Dashboard: `localhost:8265`
 - 📉 Grafana: `localhost:3009` (user/password: `admin:admin`)
 - 🖥️ MLflow UI: `localhost:5001`
 
-### Data and Training Pipeline
-
 Go to the Airflow UI (default user and password is `airflow:airflow`) and you should see the `data_pipeline` and `training_pipeline` DAGs. These 2 DAGs are automatically triggered, but you can also trigger them manually.
 
 ![Airflow DAGs](./docs/images/airflow-dags.jpg)
 
-#### 🔄 Data Pipeline
+#### 🔄 Data Pipeline (5)
 
-The `data_pipeline` DAG is composed of six tasks, divided into three layers:
+##### Data Lake
+
+Data from external sources is ingested into the Data Lake, then transformed into a format suitable for the Data Warehouse for analysis purposes.
+
+To make it simple, I used the data from the `tracking.user_behavior.validated` topic in this `data_pipeline` DAG. To end this, we first start the Data Lake, then we create a connector to ingest the data from the `tracking.user_behavior.validated` topic to the Data Lake.
+
+```bash
+make up-data-lake
+```
+
+The Data Lake is a **MinIO** instance, you can see the UI at `localhost:9001` (user/password: `minioadmin:minioadmin`).
+
+Next, we need to create a connector to ingest the data from the `tracking.user_behavior.validated` topic to the Data Lake.
+
+```bash
+make deploy_s3_connector
+```
+
+To see the MinIO UI, you can go to `localhost:9001` (default user and password is `minioadmin:minioadmin`). There are 2 buckets, `validated-events-bucket` and `invalidated-events-bucket`, you can go to each bucket and you should see the events being synced.
+
+![MinIO Buckets](./docs/images/minio-buckets.jpg)
+
+Each record in buckets is a JSON file, you can click on the file and you should see the event.
+
+![MinIO Record](./docs/images/minio-record.jpg)
+
+##### Data Pipeline
+
+The `data_pipeline` DAG is divided into three layers:
 
 ![Data Pipeline DAG](./docs/images/data-pipeline-dag.jpg)
 
-##### Bronze Layer:
+###### Bronze Layer:
 
-1. **check_minio_connection** - Ensures a stable connection to the MinIO Data Lake for storing raw data.
-2. **ingest_raw_data** - Ingests raw data from Data Lake.
-3. **quality_check_raw_data** - Performs validations on the ingested raw data, ensuring data integrity.
+1. **ingest_raw_data** - Ingests raw data from the Data Lake.
+2. **quality_check_raw_data** - Performs validations on the ingested raw data, ensuring data integrity.
 
-##### Silver Layer:
+###### Silver Layer:
 
-4. **transform_data** - Cleans and transforms validated raw data, preparing it for downstream usage.
+3. **transform_data** - Cleans and transforms validated raw data, preparing it for downstream usage.
 
-##### Gold Layer:
+###### Gold Layer:
 
-5. **load_dimensions_and_facts** - Creates dimension and fact tables in the data warehouse.
-6. **quality_check_gold_data** - Conducts final quality checks on the "gold" tables to ensure the data is accurate and reliable for model training and analysis.
+4. **create dim and fact tables** - Creates dimension and fact tables in the Data Warehouse for analysis.
 
-Trigger the `data_pipeline` DAG, and you should see the tasks running. This DAG will take some time to complete, but you can check the logs in the Airflow UI to see the progress. For simplicity, I hardcoded the `MINIO_PATH_PREFIX` to `topics/tracking.user_behavior.validated/year=2025/month=01`. Ideally, you should use the actual timestamp for each run. For example, `validated-events-bucket/topics/tracking.user_behavior.validated/year=2025/month=01/day=07/hour=XX`, where XX is the hour of the day.
+Trigger the `data_pipeline` DAG, and you should see the tasks running. This DAG will take some time to complete, but you can check the logs in the Airflow UI to monitor the progress. For simplicity, I hardcoded the `MINIO_PATH_PREFIX` to `topics/tracking.user_behavior.validated/year=2025/month=01`. Ideally, you should use the actual timestamp for each run. For example, `validated-events-bucket/topics/tracking.user_behavior.validated/year=2025/month=01/day=07/hour=XX`, where XX is the hour of the day.
 
 I also use checkpointing to ensure the DAG is resilient to failures and can resume from where it left off. The checkpoint is stored in the Data Lake, just under the `MINIO_PATH_PREFIX`, so if the DAG fails, you can simply trigger it again, and it will resume from the last checkpoint.
 
-**⚠️ Note**: One thing you could improve is to use `Spark` or `Ray` to load and process the data. In my case, I want to use Ray to load and process the data, but sadly I got some issues and didn't have time to fix it.
+#### 🤼‍♂️ Training Pipeline (6)
 
-#### 🤼‍♂️ Training Pipeline
-
-The `training_pipeline` DAG is composed of four tasks:
+The `training_pipeline` DAG is composed of these steps:
 
 ![Training Pipeline DAG](./docs/images/training-pipeline-dag.jpg)
 
-1. **load_training_data** - Pulls processed data from the data warehouse for use in training the machine learning model.
-2. **tune_hyperparameters** - Utilizes Ray Tune to perform distributed hyperparameter tuning, optimizing the model's performance.
-3. **train_final_model** - Trains the final machine learning model using the best hyperparameters from the tuning phase.
-4. **save_results** - Saves the trained model and associated metrics to the Model Registry for future deployment and evaluation.
+1. **Load Data** - Pulls processed data from the Data Warehouse for use in training the machine learning model.
+2. **Tune Hyperparameters** - Utilizes Ray Tune to perform distributed hyperparameter tuning, optimizing the model's performance.
+3. **Train Final Model** - Trains the final machine learning model using the best hyperparameters from the tuning phase.
+4. **Save Results** - Saves the trained model and associated metrics to the Model Registry for future deployment and evaluation.
 
 Trigger the `training_pipeline` DAG, and you should see the tasks running. This DAG will take some time to complete, but you can check the logs in the Airflow UI to see the progress.
 
@@ -487,63 +534,7 @@ The model will be versioned in the Model Registry, you can go to `localhost:5001
 
 ![MLflow Models](./docs/images/mlflow-models.jpg)
 
-### 📦 Start Online Store
-
-```bash
-make up-online-store
-```
-
-Look at the `docker-compose.online-store.yaml` file, you will see 2 services, the `redis` service and the `feature-retrieval` service. The `redis` service is the Online Store, and the `feature-retrieval` service is the Feature Retrieval service.
-
-The `feature-retrieval` service is a Python service that will run the following commands:
-
-```bash
-python setup.py # Setup the feature store
-python materialize_features.py # Materialize the features from Data Warehouse to Redis, highly recommend to run this in a cron job
-python api.py # Start a simple FastAPI app to retrieve the features
-```
-
-To view the Swagger UI, you can go to `localhost:8001/docs`.
-
-#### 🔄 Syncing Data from Kafka to Redis
-
-First, we need to start the `validated_events_to_features` job, this job will consume the `tracking.user_behavior.validated` topic, process the data, and store it in the `model.features.ready` topic.
-
-```bash
-make validated_events_to_features
-```
-
-![Validated Events to Features Job](./docs/images/validated-events-to-features-job.jpg)
-
-Then, we need to start the `ingest_stream` job, this job will consume the `model.features.ready` topic, process the data, and store it in the Redis Online Store.
-
-```bash
-make ingest_stream
-```
-
-![Kafka to Feast Online Store Job Log](./docs/images/kafka-to-feast-online-store-job-log.jpg)
-
-This command will `cd` to `src/feature_stores`, create a virtual environment, activate it, install the dependencies, and run the `ingest_stream_to_online_store.py` script. This script will consume the `tracking.user_behavior.validated` topic, process the data, and store it in the `model.features.ready` topic.
-
-Here is an example of the record in the `model.features.ready` topic:
-
-```json
-{
-  "event_timestamp": "2019-10-01 02:40:47 UTC",
-  "user_id": 555464681,
-  "product_id": 2402894,
-  "user_session": "10d6b1d6-951f-4e5a-a650-eb567c9ed3a1",
-  "event_type": "view",
-  "category_code": "appliances.kitchen.hood",
-  "price": 162.54,
-  "brand": "zorg",
-  "category_code_level1": "appliances",
-  "category_code_level2": "kitchen",
-  "processed_at": "2025-01-07T13:06:47.930295"
-}
-```
-
-### 🚀 Start Serving Pipeline
+### 🚀 Start Serving Pipeline (7)
 
 ```bash
 make up-serving
@@ -553,7 +544,7 @@ This command will start the Serving Pipeline. Note that we did not port forward 
 
 ![Serving Pipeline](./docs/images/serving-pipeline-swagger-ui.jpg)
 
-### 🔎 Start Observability
+### 🔎 Start Observability (8)
 
 #### 📈 Signoz
 
@@ -567,27 +558,29 @@ This command will start the Observability Pipeline. This is a SigNoz instance th
 
 ![Observability](./docs/images/signoz-2.jpg)
 
-#### 📉 Prometheus and Grafana
+#### 📉 Prometheus and Grafana (9)
 
 To see the Ray Cluster information, you can go to `localhost:3009` (user/password: `admin:admin`) and you should see the Grafana dashboard.
 
 ![Grafana](./docs/images/grafana.jpg)
 
-### 🔒 NGINX
+**Note**: If you dont see the dashboards, please remove the `tmp/ray` folder and then restart Ray Cluster and Grafana again.
+
+### 🔒 NGINX (10)
 
 ```bash
 make up-nginx
 ```
 
-This command will start the NGINX Proxy Manager, which provides a user-friendly interface for configuring reverse proxies and SSL certificates. Access the UI at `localhost:81` using the default credentials:
+This command will start the **NGINX Proxy Manager**, which provides a user-friendly interface for configuring reverse proxies and SSL certificates. Access the UI at `localhost:81` using the default credentials:
 
 - Username: `admin@example.com`
 - Password: `changeme`
 
 Key configuration options include:
 
-- SSL certificate management using:
-  - Let's Encrypt (free, automated)
+- Free SSL certificate management using:
+  - Let's Encrypt
   - Cloudflare SSL
 - Free dynamic DNS providers:
   - [DuckDNS](https://www.duckdns.org/)
@@ -603,6 +596,10 @@ Key configuration options include:
 ![NGINX Proxy Manager 2](./docs/images/nginx-proxy-manager-2.jpg)
 
 ---
+
+## Contributing
+
+This project is open to contributions. Please feel free to submit a PR.
 
 ## 📃 License
 
