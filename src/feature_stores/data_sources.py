@@ -1,3 +1,4 @@
+import os
 from datetime import timedelta
 
 from feast import KafkaSource
@@ -6,10 +7,19 @@ from feast.infra.offline_stores.contrib.postgres_offline_store.postgres_source i
     PostgreSQLSource,
 )
 
+
+def read_sql_file(filename):
+    """Read SQL query from file."""
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    sql_path = os.path.join(current_dir, "sql", filename)
+    with open(sql_path, "r") as f:
+        return f.read().strip()
+
+
 # Batch source for validated events (historical data)
 validated_events_batch = PostgreSQLSource(
     name="validated_events_batch",
-    query="SELECT * FROM feature_store.streaming_features WHERE 1=1",
+    query=read_sql_file("validated_events.sql"),
     timestamp_field="event_timestamp",
 )
 
