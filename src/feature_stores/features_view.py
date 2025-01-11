@@ -1,6 +1,7 @@
 from datetime import timedelta
 
 from data_sources import validated_events_stream
+from entities import product, user
 from feast import Field
 from feast.stream_feature_view import stream_feature_view
 from feast.types import Float32, Int64, String
@@ -8,7 +9,7 @@ from pyspark.sql import DataFrame
 
 
 @stream_feature_view(
-    entities=[],
+    entities=[user, product],
     ttl=timedelta(days=1),
     mode="spark",
     schema=[
@@ -25,5 +26,4 @@ from pyspark.sql import DataFrame
     source=validated_events_stream,
 )
 def streaming_features(df: DataFrame):
-    """Process streaming features using Spark SQL."""
     return df

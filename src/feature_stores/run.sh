@@ -5,16 +5,33 @@ set -e
 
 echo "Starting Feature Store Setup..."
 
-# Create and activate virtual environment
-echo "Setting up virtual environment..."
-python -m venv .venv
-source .venv/bin/activate
+# Create virtual environment if it doesn't exist
+if [ ! -d ".venv" ]; then
+    echo "Setting up virtual environment..."
+    python -m venv .venv
+fi
 
-# Install dependencies
+# Activate virtual environment and install dependencies
 echo "Installing dependencies..."
-pip install --upgrade pip
+source .venv/bin/activate
 pip install -r requirements.txt
 
-# Setup feature store
+# Wait for PostgreSQL to be ready
+echo "Waiting for PostgreSQL..."
+max_retries=30
+counter=0
+while ! pg_isready -h ${POSTGRES_HOST:-localhost} -p ${POSTGRES_PORT:-5433}; do
+    counter=$((counter + 1))
+    if [ $counter -eq $max_retries ]; then
+        echo "Failed to connect to PostgreSQL after $max_retries attempts"
+        exit 1
+    fi
+    echo "Waiting for PostgreSQL to start... ($counter/$max_retries)"
+    sleep 1
+done
+
+echo "PostgreSQL is ready!"
 echo "Setting up feature store..."
+
+python setup_db.py
 python setup.py

@@ -1,7 +1,7 @@
 [project]
-name = "easydatapipeline"
+name = "easymlops"
 version = "0.1.0"
-description = "A simple data pipeline project"
+description = "A simple MLOps project"
 readme = "README.md"
 requires-python = ">=3.9.18"
 dependencies = [
