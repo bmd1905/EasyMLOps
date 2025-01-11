@@ -11,6 +11,7 @@ from include.config.tune_config import (
 from airflow.decorators import task
 from airflow.exceptions import AirflowException
 from airflow.providers.postgres.hooks.postgres import PostgresHook
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -49,18 +50,33 @@ def load_training_data() -> Dict[str, List[Dict]]:
         for col in CATEGORICAL_COLUMNS:
             logger.debug(f"Encoding categorical column: {col}")
             # Create mapping dictionary for each category
-            unique_values = df[col].dropna().unique()
+            unique_values = df[col].dropna().unique().tolist()  # Convert to Python list
+            # Convert both keys and values to native Python types
             category_mapping = {
-                val: idx for idx, val in enumerate(sorted(unique_values))
+                (
+                    int(val) if isinstance(val, (np.integer, np.floating)) else str(val)
+                ): int(idx)
+                for idx, val in enumerate(sorted(unique_values))
             }
             category_mappings[col] = category_mapping
 
             # Apply mapping (with a default for unseen categories)
-            df[col] = df[col].map(category_mapping).fillna(-1)
+            df[col] = df[col].map(category_mapping).fillna(-1).astype(int)
 
         logger.info("Data preprocessing completed successfully")
+
+        # Convert DataFrame to native Python types
+        records = df.to_dict(orient="records")
+        records = [
+            {
+                k: int(v) if isinstance(v, (np.integer, np.floating)) else v
+                for k, v in record.items()
+            }
+            for record in records
+        ]
+
         return {
-            "data": df.to_dict(orient="records"),
+            "data": records,
             "category_mappings": category_mappings,
         }
     except Exception as e:
