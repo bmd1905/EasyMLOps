@@ -1,0 +1,46 @@
+{
+  "doc": "Schema for e-commerce events data",
+  "name": "ECommerceEvent",
+  "namespace": "com.ecommerce.events",
+  "type": "record",
+  "fields": [
+    {
+      "name": "event_time",
+      "type": "string"
+    },
+    {
+      "name": "event_type",
+      "type": "string"
+    },
+    {
+      "name": "product_id",
+      "type": "long"
+    },
+    {
+      "name": "category_id",
+      "type": "long"
+    },
+    {
+      "name": "category_code",
+      "type": ["null", "string"],
+      "default": null
+    },
+    {
+      "name": "brand",
+      "type": ["null", "string"],
+      "default": null
+    },
+    {
+      "name": "price",
+      "type": "double"
+    },
+    {
+      "name": "user_id",
+      "type": "long"
+    },
+    {
+      "name": "user_session",
+      "type": "string"
+    }
+  ]
+}

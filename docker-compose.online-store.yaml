@@ -1,0 +1,34 @@
+services:
+  # Online Store (Redis)
+  redis:
+    image: redis:latest
+    container_name: online-store-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 30s
+      retries: 50
+      start_period: 30s
+    networks:
+      - easymlops_network
+
+  # Feature Retrieval
+  feature-retrieval:
+    build:
+      dockerfile: Dockerfile
+      context: src/feature_stores
+    container_name: feature-retrieval
+    command: ["sh", "-c", "python api.py"]
+    ports:
+      - "8001:8001"
+    depends_on:
+      - redis
+
+    networks:
+      - easymlops_network
+
+networks:
+  easymlops_network:
+    external: true

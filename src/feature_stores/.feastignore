@@ -1,0 +1,14 @@
+# What to ignore when using `feast apply`
+# https://docs.feast.dev/reference/feature-repository/feast-ignore
+
+# Ignore virtual environment
+venv
+
+# Ignore a specific Python file
+scripts/foo.py
+
+# Ignore all Python files directly under scripts directory
+scripts/*.py
+
+# Ignore all "foo.py" anywhere under scripts directory
+scripts/**/foo.py

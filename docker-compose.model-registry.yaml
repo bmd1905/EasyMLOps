@@ -1,0 +1,71 @@
+services:
+  db:
+    restart: always
+    image: postgres
+    container_name: mlflow_db
+    expose:
+      - "${PG_PORT:-5432}"
+    env_file:
+      - .env
+    environment:
+      - POSTGRES_USER=${PG_USER:-mlflow}
+      - POSTGRES_PASSWORD=${PG_PASSWORD:-mlflow}
+      - POSTGRES_DATABASE=${PG_DATABASE:-mlflow}
+    volumes:
+      - db_data:/var/lib/postgresql/data/
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "pg_isready",
+          "-p",
+          "${PG_PORT:-5432}",
+          "-U",
+          "${PG_USER:-mlflow}",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+    networks:
+      - easymlops_network
+
+  tracking_server:
+    restart: always
+    build:
+      context: ./src/model_registry
+      dockerfile: Dockerfile
+    image: mlflow_server
+    container_name: mlflow_server
+    depends_on:
+      - db
+    env_file:
+      - .env
+    ports:
+      - "${MLFLOW_PORT:-5001}:5000"
+    environment:
+      - AWS_ACCESS_KEY_ID=${MINIO_ACCESS_KEY:-minioadmin}
+      - AWS_SECRET_ACCESS_KEY=${MINIO_SECRET_ACCESS_KEY:-minioadmin}
+      - MLFLOW_S3_ENDPOINT_URL=http://minio:${MINIO_PORT:-9000}
+      - MLFLOW_S3_IGNORE_TLS=true
+      - MLFLOW_TRACKING_URI=${MLFLOW_TRACKING_URI:-http://0.0.0.0:5001}
+    command: >
+      mlflow server
+      --backend-store-uri postgresql://${PG_USER:-mlflow}:${PG_PASSWORD:-mlflow}@db:${PG_PORT:-5432}/${PG_DATABASE:-mlflow}
+      --host 0.0.0.0
+      --port 5000
+      --serve-artifacts
+      --artifacts-destination s3://${MLFLOW_BUCKET_NAME:-model-checkpoints}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${MLFLOW_PORT:-5000}/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - easymlops_network
+
+volumes:
+  db_data:
+
+networks:
+  easymlops_network:
+    external: true

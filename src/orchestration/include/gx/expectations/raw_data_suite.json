@@ -1,0 +1,16 @@
+{
+    "data_asset_type": null,
+    "expectation_suite_name": "raw_data_suite",
+    "expectations": [
+        {
+            "expectation_type": "expect_table_row_count_to_be_between",
+            "kwargs": {
+                "min_value": 0,
+                "max_value": 1000000
+            }
+        }
+    ],
+    "meta": {
+        "great_expectations_version": "0.15.34"
+    }
+}

@@ -1,0 +1,27 @@
+[project]
+name = "easymlops"
+version = "0.1.0"
+description = "A simple MLOps project"
+readme = "README.md"
+requires-python = ">=3.9.18"
+dependencies = [
+    "apache-flink==1.17.1",
+    "avro-python3==1.8.1",
+    "boto3==1.35.74",
+    "botocore>=1.35.77",
+    "fastparquet>=0.8.3",
+    "feast>=0.20.2",
+    "ipykernel>=6.29.5",
+    "kafka-python>=2.0.2",
+    "loguru==0.7.0",
+    "mlflow>=2.19.0",
+    "psycopg2-binary==2.9.10",
+    "pyarrow==8.0.0",
+    "pydantic-settings>=2.7.0",
+    "python-schema-registry-client==2.4.1",
+    "ray[data,serve,train,tune]==2.9.0",
+    "setuptools>=75.6.0",
+    "sqlalchemy==2.0.36",
+    "tqdm>=4.67.1",
+    "xgboost>=2.1.3",
+]

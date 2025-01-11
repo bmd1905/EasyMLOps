@@ -1,0 +1,8 @@
+loguru==0.7.0
+psycopg2-binary==2.9.10
+pyarrow==18.1.0
+sqlalchemy==2.0.36
+numpy==1.26.1
+python-dotenv==1.0.0
+pandas==2.2.3
+fastparquet==2024.11.0
