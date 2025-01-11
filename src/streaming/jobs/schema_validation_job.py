@@ -297,7 +297,9 @@ class SchemaValidationJob(FlinkJob):
 
         # Create and process streams
         streams = [
-            env.from_source(source, WatermarkStrategy.no_watermarks(), f"Source {i+1}")
+            env.from_source(
+                source, WatermarkStrategy.no_watermarks(), f"Source {i + 1}"
+            )
             for i, source in enumerate(sources)
         ]
 

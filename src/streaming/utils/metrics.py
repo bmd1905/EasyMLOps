@@ -1,15 +1,7 @@
-import sys
 import time
 from threading import Lock
 
 from loguru import logger
-
-# Configure logger
-logger.remove()
-logger.add(
-    sys.stderr,
-    level="INFO",
-)
 
 
 class RequestCounter:

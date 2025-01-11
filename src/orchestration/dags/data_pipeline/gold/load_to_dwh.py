@@ -1,6 +1,8 @@
 from typing import Any, Dict
 
 import pandas as pd
+from airflow.decorators import task
+from airflow.providers.postgres.hooks.postgres import PostgresHook
 from include.common.scripts.db_utils import batch_insert_data, create_schema_and_table
 from include.common.scripts.dim_schemas import (
     DimCategorySchema,
@@ -11,9 +13,6 @@ from include.common.scripts.dim_schemas import (
 from include.common.scripts.fact_schemas import FactEventSchema
 from include.common.scripts.sql_utils import load_sql_template
 from loguru import logger
-
-from airflow.decorators import task
-from airflow.providers.postgres.hooks.postgres import PostgresHook
 
 logger = logger.bind(name=__name__)
 
