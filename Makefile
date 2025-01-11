@@ -1,5 +1,5 @@
 # Declare all phony targets
-.PHONY: test producer consumer up down restart all clean logs help
+.PHONY: test producer consumer up down restart all clean logs help db-start db-stop db-reset
 
 # Configuration
 KAFKA_COMPOSE_FILE := docker-compose.kafka.yaml
@@ -23,7 +23,7 @@ up-network:
 up-kafka:
 	docker compose -f $(KAFKA_COMPOSE_FILE) up -d --build
 
-up-cdc: up-kafka
+up-cdc:
 	docker compose -f $(CDC_COMPOSE_FILE) up -d --build
 
 up-data-lake:
@@ -41,9 +41,8 @@ up-grafana:
 up-model-registry:
 	docker compose -f $(MODEL_REGISTRY_COMPOSE_FILE) up -d --build
 
-up-orchestration: up-data-lake up-dwh up-ray-cluster up-model-registry up-grafana
+up-orchestration: up-ray-cluster up-model-registry up-grafana
 	docker compose -f $(ORCHESTRATION_COMPOSE_FILE) up -d --build
-	make deploy_s3_connector
 
 # ------------------------------------------ Serving Pipeline Commands ------------------------------------------
 up-online-store:
@@ -178,15 +177,12 @@ view-schemas:
 view-consumer-groups:
 	docker compose -f $(KAFKA_COMPOSE_FILE) exec -it broker kafka-consumer-groups --bootstrap-server broker:9092 --list
 
+deploy_s3_connector:
+	uv run $(PYTHON) -m src.streaming.connectors.deploy_s3_connector
+
 # ------------------------------------------ Feature Store Commands ------------------------------------------
-start-feature-store:
-	cd src/feature_stores && ./run.sh && . .venv/bin/activate && python materialize_features.py && uvicorn api:app --host 0.0.0.0 --port 8002 --reload
-
-materialize-features:
-	cd src/feature_stores && . .venv/bin/activate && python materialize_features.py
-
 start-feature-service:
-	cd src/feature_stores && . .venv/bin/activate && uvicorn api:app --host 0.0.0.0 --port 8002 --reload
+	cd src/feature_stores && . .venv/bin/activate && uvicorn api:app --host 0.0.0.0 --port 8001 --reload
 
 # ------------------------------------------ Streaming Commands ------------------------------------------
 producer:
@@ -194,9 +190,6 @@ producer:
 
 schema_validation:
 	uv run $(PYTHON) -m src.streaming.main schema_validation
-
-deploy_s3_connector:
-	uv run $(PYTHON) -m src.streaming.connectors.deploy_s3_connector
 
 alert_invalid_events:
 	uv run $(PYTHON) -m src.streaming.main alert_invalid_events
