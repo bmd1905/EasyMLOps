@@ -4,6 +4,7 @@ from time import sleep
 import pandas as pd
 from dotenv import load_dotenv
 from loguru import logger
+from models import Event
 from postgresql_client import PostgresSQLClient
 
 load_dotenv()
@@ -11,32 +12,28 @@ load_dotenv()
 SAMPLE_DATA_PATH = os.path.join(
     os.path.dirname(__file__), "data", "sample.parquet.gzip"
 )
-TABLE_NAME = "events"
 
 
 def format_record(row):
-    # Convert microseconds timestamp to datetime string in UTC
+    # Convert microseconds timestamp to datetime object
     if isinstance(row["event_time"], (int, float)):
-        # Handle microseconds timestamp
         timestamp = pd.to_datetime(row["event_time"], unit="us")
     else:
-        # Handle string or datetime timestamp
         timestamp = pd.to_datetime(row["event_time"])
 
-    record = {
-        "event_time": timestamp.strftime("%Y-%m-%d %H:%M:%S UTC"),
-        "event_type": str(row["event_type"]),
-        "product_id": int(row["product_id"]),
-        "category_id": int(row["category_id"]),
-        "category_code": str(row["category_code"])
+    return Event(
+        event_time=timestamp,
+        event_type=str(row["event_type"]),
+        product_id=int(row["product_id"]),
+        category_id=int(row["category_id"]),
+        category_code=str(row["category_code"])
         if pd.notnull(row["category_code"])
         else None,
-        "brand": str(row["brand"]) if pd.notnull(row["brand"]) else None,
-        "price": max(float(row["price"]), 0),
-        "user_id": int(row["user_id"]),
-        "user_session": str(row["user_session"]),
-    }
-    return record
+        brand=str(row["brand"]) if pd.notnull(row["brand"]) else None,
+        price=max(float(row["price"]), 0),
+        user_id=int(row["user_id"]),
+        user_session=str(row["user_session"]),
+    )
 
 
 def load_sample_data():
@@ -68,44 +65,45 @@ def main():
     )
     logger.info("Successfully connected to PostgreSQL database")
 
-    columns = [
-        "event_time",
-        "event_type",
-        "product_id",
-        "category_id",
-        "category_code",
-        "brand",
-        "price",
-        "user_id",
-        "user_session",
-    ]
-
     # Load and process records
     records = load_sample_data()
     valid_records = 0
     invalid_records = 0
 
+    # Get session
+    session = pc.get_session()
+
     logger.info("Starting record insertion")
-    for record in records:
-        # Extract values in the correct order
-        values = [record.get(col) for col in columns]
+    batch_size = 100
+    current_batch = []
 
-        # Insert record
-        placeholders = ",".join(["%s"] * len(columns))
-        query = f"""
-            INSERT INTO {TABLE_NAME} ({",".join(columns)})
-            VALUES ({placeholders})
-        """
-        try:
-            pc.execute_query(query, values)
-            valid_records += 1
-            if valid_records % 1000 == 0:
-                logger.info(f"Processed {valid_records} valid records")
-        except Exception as e:
-            logger.error(f"Failed to insert record: {str(e)}")
-            invalid_records += 1
+    try:
+        for record in records:
+            try:
+                current_batch.append(record)
+                if len(current_batch) >= batch_size:
+                    session.bulk_save_objects(current_batch)
+                    session.commit()
+                    valid_records += len(current_batch)
+                    current_batch = []
+                    logger.info(f"Processed {valid_records} valid records")
+                    sleep(0.5)
+            except Exception as e:
+                logger.error(f"Failed to insert record: {str(e)}")
+                invalid_records += 1
+                session.rollback()
 
-        sleep(0.5)
+        # Insert remaining records
+        if current_batch:
+            session.bulk_save_objects(current_batch)
+            session.commit()
+            valid_records += len(current_batch)
+
+    except Exception as e:
+        logger.error(f"Batch insertion error: {str(e)}")
+        session.rollback()
+    finally:
+        session.close()
 
     logger.info("\nFinal Summary:")
     logger.info(f"Total records processed: {len(records)}")

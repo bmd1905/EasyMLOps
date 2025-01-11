@@ -17,28 +17,15 @@ def main():
         password=os.getenv("POSTGRES_PASSWORD"),
     )
 
-    # Drop events table if exists
-    logger.info("Dropping existing events table if it exists")
-    drop_table_query = "DROP TABLE IF EXISTS events;"
-    pc.execute_query(drop_table_query)
-
-    # Create events table with timestamp format that matches your requirement
-    logger.info("Creating events table")
-    create_table_query = """
-        CREATE TABLE IF NOT EXISTS events (
-            event_time TIMESTAMP WITH TIME ZONE DEFAULT timezone('UTC', now()),
-            event_type VARCHAR(50),
-            product_id BIGINT,
-            category_id BIGINT,
-            category_code VARCHAR(255),
-            brand VARCHAR(255),
-            price DOUBLE PRECISION,
-            user_id BIGINT,
-            user_session VARCHAR(255)
-        );
-    """
     try:
-        pc.execute_query(create_table_query)
+        # Drop all tables
+        logger.info("Dropping existing tables")
+        pc.drop_tables()
+
+        # Create tables
+        logger.info("Creating tables")
+        pc.create_tables()
+
         logger.success("Successfully created events table")
     except Exception as e:
         logger.error(f"Failed to create table with error: {e}")

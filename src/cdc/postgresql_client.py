@@ -1,6 +1,9 @@
 import pandas as pd
-import psycopg2
 from sqlalchemy import create_engine
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
+
+Base = declarative_base()
 
 
 class PostgresSQLClient:
@@ -10,39 +13,33 @@ class PostgresSQLClient:
         self.password = password
         self.host = host
         self.port = port
+        self.engine = None
+        self.Session = None
+        self._connect()
 
-    def create_conn(self):
-        # Establishing the connection
-        conn = psycopg2.connect(
-            database=self.database,
-            user=self.user,
-            password=self.password,
-            host=self.host,
-            port=self.port,
-        )
-        # Creating a cursor object using the cursor() method
-        return conn
+    def _connect(self):
+        # Create SQLAlchemy engine
+        connection_string = f"postgresql://{self.user}:{self.password}@{self.host}:{self.port}/{self.database}"
+        self.engine = create_engine(connection_string)
+        self.Session = sessionmaker(bind=self.engine)
+
+    def create_tables(self):
+        Base.metadata.create_all(self.engine)
+
+    def drop_tables(self):
+        Base.metadata.drop_all(self.engine)
+
+    def get_session(self):
+        return self.Session()
 
     def execute_query(self, query, values=None):
-        conn = self.create_conn()
-        cursor = conn.cursor()
-        try:
+        """Maintained for backwards compatibility"""
+        with self.engine.connect() as connection:
             if values:
-                cursor.execute(query, values)
+                connection.execute(query, values)
             else:
-                cursor.execute(query)
-            conn.commit()
-            print("Query executed successfully!")
-        except Exception as e:
-            print(f"Error executing query: {str(e)}")
-            raise
-        finally:
-            conn.close()
+                connection.execute(query)
 
     def get_columns(self, table_name):
-        engine = create_engine(
-            f"postgresql+psycopg2://{self.user}:{self.password}@{self.host}:{self.port}"
-        )
-        conn = engine.connect()
-        df = pd.read_sql(f"select * from {table_name}", conn)
+        df = pd.read_sql(f"select * from {table_name} LIMIT 0", self.engine)
         return df.columns
