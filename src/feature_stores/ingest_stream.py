@@ -280,17 +280,30 @@ def preprocess_fn(df: pd.DataFrame) -> pd.DataFrame:
             .withColumn("is_purchased", F.col("is_purchased").cast("integer"))
         )
 
-        # Fill nulls with -1 for numeric columns
-        numeric_cols = [
-            "user_id",
-            "product_id",
-            "price",
-            "event_weekday",
-            "activity_count",
-            "is_purchased",
-        ]
-        for col in numeric_cols:
-            spark_df = spark_df.fillna({col: -1})
+        # Filter out rows with null or invalid values
+        spark_df = spark_df.filter(
+            # Remove rows with null values in any column
+            F.col("user_id").isNotNull()
+            & F.col("product_id").isNotNull()
+            & F.col("price").isNotNull()
+            & F.col("brand").isNotNull()
+            & F.col("category_code_level1").isNotNull()
+            & F.col("category_code_level2").isNotNull()
+            & F.col("user_session").isNotNull()
+            &
+            # Remove rows with empty strings in text columns
+            (F.trim(F.col("brand")) != "")
+            & (F.trim(F.col("category_code_level1")) != "")
+            & (F.trim(F.col("category_code_level2")) != "")
+            & (F.trim(F.col("user_session")) != "")
+            &
+            # Additional data quality checks
+            (F.col("user_id") > 0)
+            & (F.col("product_id") > 0)
+            & (F.col("price") >= 0)
+            & (F.col("activity_count") > 0)
+            & (F.col("event_weekday").between(0, 6))
+        )
 
         # Select final columns
         feature_cols = [
