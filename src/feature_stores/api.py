@@ -23,7 +23,7 @@ class FeatureRequest(BaseModel):
 
 @app.post("/features")
 async def get_features(request: FeatureRequest):
-    result = store.get_online_features(
+    result = await store.get_online_features_async(
         features=[
             "streaming_features:activity_count",
             "streaming_features:event_weekday",
