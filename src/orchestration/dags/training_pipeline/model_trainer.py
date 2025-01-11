@@ -9,8 +9,10 @@ def train_final_model(data: dict, best_params: dict) -> dict:
     import json
     from datetime import datetime
 
+    import mlflow
     import pandas as pd
     import pyarrow.fs
+    from airflow.exceptions import AirflowException
     from include.config.tune_config import (
         MINIO_CONFIG,
         MODEL_NAME,
@@ -20,14 +22,14 @@ def train_final_model(data: dict, best_params: dict) -> dict:
         XGBOOST_PARAMS,
     )
     from loguru import logger
-
-    import mlflow
-    import ray
-    from airflow.exceptions import AirflowException
     from mlflow.tracking.client import MlflowClient
+
+    import ray
     from ray.air.integrations.mlflow import MLflowLoggerCallback
     from ray.train import CheckpointConfig, RunConfig, ScalingConfig
     from ray.train.xgboost import XGBoostTrainer
+
+    logger = logger.bind(name=__name__)
 
     try:
         # Set MLflow tracking URI

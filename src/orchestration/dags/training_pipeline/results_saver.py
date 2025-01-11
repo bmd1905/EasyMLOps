@@ -1,9 +1,8 @@
-import logging
-
 from airflow.decorators import task
 from include.common.scripts.monitoring import PipelineMonitoring
+from loguru import logger
 
-logger = logging.getLogger(__name__)
+logger = logger.bind(name=__name__)
 
 
 @task(trigger_rule="all_done")

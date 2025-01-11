@@ -1,10 +1,5 @@
-import logging
-
-from ray_provider.decorators import ray
-
 from include.config.tune_config import RAY_TASK_CONFIG
-
-logger = logging.getLogger(__name__)
+from ray_provider.decorators import ray
 
 
 @ray.task(config=RAY_TASK_CONFIG)
@@ -13,11 +8,9 @@ def tune_hyperparameters(data: dict) -> dict:
 
     from datetime import datetime
 
+    import mlflow
     import pandas as pd
     import pyarrow.fs
-
-    import mlflow
-    import ray
     from airflow.exceptions import AirflowException
     from include.config.tune_config import (
         MINIO_CONFIG,
@@ -26,6 +19,8 @@ def tune_hyperparameters(data: dict) -> dict:
         TUNE_SEARCH_SPACE,
         XGBOOST_PARAMS,
     )
+
+    import ray
     from ray import train, tune
     from ray.air.integrations.mlflow import MLflowLoggerCallback
     from ray.train import CheckpointConfig, RunConfig, ScalingConfig

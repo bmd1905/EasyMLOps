@@ -1,19 +1,18 @@
-import logging
 from typing import Dict, List
 
 import jinja2
+import numpy as np
+from airflow.decorators import task
+from airflow.exceptions import AirflowException
+from airflow.providers.postgres.hooks.postgres import PostgresHook
 from include.common.scripts.sql_utils import load_sql_template
 from include.config.tune_config import (
     CATEGORICAL_COLUMNS,
     FEATURE_COLUMNS,
 )
+from loguru import logger
 
-from airflow.decorators import task
-from airflow.exceptions import AirflowException
-from airflow.providers.postgres.hooks.postgres import PostgresHook
-import numpy as np
-
-logger = logging.getLogger(__name__)
+logger = logger.bind(name=__name__)
 
 
 @task()
