@@ -6,38 +6,39 @@ A turnkey MLOps pipeline demonstrating how to go from raw events to real-time pr
 
 ## 📑 Table of Contents
 
-- [🌐 Architecture Overview](#architecture-overview)
+- [🚀 EasyMLOps](#-easymlops)
+- [🌐 Architecture Overview](#-architecture-overview)
   - [1. Data Pipeline](#1-data-pipeline)
-    - [📤 a. Data Sources](#a-data-sources)
-    - [✅ b. Schema Validation (Flink)](#b-schema-validation-flink)
-    - [☁️ c. Storage Layer](#c-storage-layer)
-    - [🛒 d. Feature Engineering](#d-feature-engineering)
+    - [📤 Data Sources](#-data-sources)
+    - [✅ Schema Validation](#-schema-validation)
+    - [☁️ Storage Layer](#-storage-layer)
+    - [🛒 Spark Streaming](#-spark-streaming)
   - [2. Training Pipeline](#2-training-pipeline)
-    - [🌟 a. Distributed Training](#a-distributed-training)
-    - [📦 b. Model Management](#b-model-management)
+    - [🌟 Distributed Training](#-distributed-training)
+    - [📦 Model Management](#-model-management)
   - [3. Serving Pipeline](#3-serving-pipeline)
-    - [⚡ a. Model Serving](#a-model-serving)
-    - [🔍 b. Feature Service](#b-feature-service)
-    - [📈 c. Scalability & Performance](#c-scalability--performance)
+    - [⚡ Model Serving](#-model-serving)
+    - [🔍 Feature Service](#-feature-service)
   - [4. Observability](#4-observability)
-    - [📡 a. Metrics & Monitoring](#a-metrics--monitoring)
-    - [🔒 b. Access Management](#b-access-management)
-- [📖 Details](#details)
-  - [🔧 Setup Environment Variables](#setup-environment-variables)
-  - [🏁 Start Data Pipeline](#start-data-pipeline)
-  - [✅ Start Schema Validation Job](#start-schema-validation-job)
-  - [☁️ Start Data Lake](#start-data-lake)
-  - [🔄 Start Orchestration](#start-orchestration)
+    - [📡 Metrics & Monitoring](#-metrics--monitoring)
+    - [🔒 Access Management](#-access-management)
+- [📖 Details](#-details)
+  - [🔧 Setup Environment Variables](#-setup-environment-variables)
+  - [🏁 Start Data Pipeline](#-start-data-pipeline)
+  - [✅ Start Schema Validation Job](#-start-schema-validation-job)
+  - [☁️ Start Data Lake](#-start-data-lake)
+  - [🔄 Start Orchestration](#-start-orchestration)
   - [Data and Training Pipeline](#data-and-training-pipeline)
-    - [🔄 Data Pipeline](#data-pipeline)
-    - [🤼‍♂️ Training Pipeline](#training-pipeline)
-    - [📦 Start Online Store](#start-online-store)
-  - [🚀 Start Serving Pipeline](#start-serving-pipeline)
-  - [🔎 Start Observability](#start-observability)
-    - [📈 SigNoz](#signoz)
-    - [📉 Prometheus and Grafana](#prometheus-and-grafana)
-  - [🔒 NGINX](#nginx)
-- [📃 License](#license)
+    - [🔄 Data Pipeline](#-data-pipeline-1)
+    - [🤼‍♂️ Training Pipeline](#-training-pipeline-1)
+    - [📦 Start Online Store](#-start-online-store)
+  - [🚀 Start Serving Pipeline](#-start-serving-pipeline)
+  - [🔎 Start Observability](#-start-observability)
+    - [📈 SigNoz](#-signoz)
+    - [📉 Prometheus and Grafana](#-prometheus-and-grafana)
+  - [🔒 NGINX](#-nginx)
+- [Contributing](#contributing)
+- [📃 License](#-license)
 
 ## 🌐 Architecture Overview
 
@@ -45,12 +46,12 @@ The system comprises four main components—**Data**, **Training**, **Serving**,
 
 ### 1. Data Pipeline
 
-#### 📤 a. Data Sources
+#### 📤 Data Sources
 
 - **Kafka Producer**: Continuously emits user behavior events to `tracking.raw_user_behavior` topic
 - **CDC Service**: Uses Debezium to capture PostgreSQL changes, streaming to `tracking_postgres_cdc.public.events`
 
-#### ✅ b. Schema Validation (Flink)
+#### ✅ Schema Validation
 
 - Validates incoming events from both sources
 - Routes events to:
@@ -58,7 +59,7 @@ The system comprises four main components—**Data**, **Training**, **Serving**,
   - `tracking.user_behavior.invalid` for schema violations
 - Handles ~10k events/second
 
-#### ☁️ c. Storage Layer
+#### ☁️ Storage Layer
 
 - **Data Lake (MinIO)**:
   - External Storage
@@ -75,7 +76,7 @@ The system comprises four main components—**Data**, **Training**, **Serving**,
   - Updated through streaming pipeline
   - Exposed via Feature Retrieval API
 
-#### 🛒 e. Spark Streaming
+#### 🛒 Spark Streaming
 
 - Transforms validated events into ML features
 - Focuses on session-based metrics and purchase behavior
@@ -83,14 +84,14 @@ The system comprises four main components—**Data**, **Training**, **Serving**,
 
 ### 2. Training Pipeline
 
-#### 🌟 a. Distributed Training
+#### 🌟 Distributed Training
 
 - **Ray Cluster**:
   - Handles distributed hyperparameter tuning via Ray Tune
   - Executes final model training
   - Integrates with MLflow for experiment tracking
 
-#### 📦 b. Model Management
+#### 📦 Model Management
 
 - **MLflow + MinIO + PostgreSQL**:
   - Tracks experiments, parameters, and metrics
@@ -99,7 +100,7 @@ The system comprises four main components—**Data**, **Training**, **Serving**,
 
 ### 3. Serving Pipeline
 
-#### ⚡ a. Model Serving
+#### ⚡ Model Serving
 
 - **Ray Serve**:
   - Loads models from MLflow registry
@@ -111,7 +112,7 @@ The system comprises four main components—**Data**, **Training**, **Serving**,
 
 ### 4. Observability
 
-#### 📡 a. Metrics & Monitoring
+#### 📡 Metrics & Monitoring
 
 - **SigNoz**:
   - Collects OpenTelemetry data
@@ -125,7 +126,7 @@ The system comprises four main components—**Data**, **Training**, **Serving**,
   - Visualizes system performance
   - Accessible at `localhost:3009`
 
-#### 🔒 b. Access Management
+#### 🔒 Access Management
 
 - **NGINX Proxy Manager**:
   - Reverse proxy for all services
