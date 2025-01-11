@@ -143,7 +143,6 @@ def create_analytical_views(postgres_hook: PostgresHook) -> None:
         views = [
             "vw_user_session_summary",
             "vw_category_performance",
-            "vw_ml_purchase_prediction",
         ]
         for view_name in views:
             verification_sql = f"""
