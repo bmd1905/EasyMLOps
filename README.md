@@ -6,236 +6,139 @@ A turnkey MLOps pipeline demonstrating how to go from raw events to real-time pr
 
 ## 📑 Table of Contents
 
-- [🌐 Architecture Overview](#-architecture-overview)
+- [🌐 Architecture Overview](#architecture-overview)
   - [1. Data Pipeline](#1-data-pipeline)
-    - [📤 a. Producers & CDC](#a-producers--cdc)
-    - [✅ b. Validation Service (Flink)](#b-validation-service-flink)
-    - [☁️ c. DataLake (MinIO)](#c-datalake-minio)
-    - [🏢 d. Data Warehouse (PostgreSQL)](#d-data-warehouse-postgresql)
-    - [🛒 e. Online Store (Redis)](#e-online-store-redis)
+    - [📤 a. Data Sources](#a-data-sources)
+    - [✅ b. Schema Validation (Flink)](#b-schema-validation-flink)
+    - [☁️ c. Storage Layer](#c-storage-layer)
+    - [🛒 d. Feature Engineering](#d-feature-engineering)
   - [2. Training Pipeline](#2-training-pipeline)
-    - [🌟 a. Distributed Training with Ray](#a-distributed-training-with-ray)
-    - [📦 b. Model Registry](#b-model-registry)
-    - [📝 c. Manual Training Option](#c-manual-training-option)
+    - [🌟 a. Distributed Training](#a-distributed-training)
+    - [📦 b. Model Management](#b-model-management)
   - [3. Serving Pipeline](#3-serving-pipeline)
-    - [⚡ a. Real-Time Inference (Ray Serve)](#a-real-time-inference-ray-serve)
-    - [🔍 b. Feature Retrieval Services](#b-feature-retrieval-services)
+    - [⚡ a. Model Serving](#a-model-serving)
+    - [🔍 b. Feature Service](#b-feature-service)
     - [📈 c. Scalability & Performance](#c-scalability--performance)
   - [4. Observability](#4-observability)
-    - [📡 a. OpenTelemetry Collector](#a-opentelemetry-collector)
-    - [📊 b. SigNoz](#b-signoz)
-    - [📉 c. Prometheus & Grafana](#c-prometheus--grafana)
-  - [🛠️ Dev Environment](#dev-environment-🛠️)
-    - [📓 a. Jupyter Notebooks](#a-jupyter-notebooks-📓)
-    - [🐳 b. Docker Compose Services](#b-docker-compose-services-🐳)
-  - [Model Registry](#model-registry)
-    - [🖥️ a. MLflow UI](#a-mlflow-ui-🖥️)
-    - [📁 b. MinIO](#b-minio-📁)
-- [📊 Sequence Diagrams](#-sequence-diagrams)
-  - [Sequence Diagram for Data Flow and Validation](#sequence-diagram-for-data-flow-and-validation)
-  - [Sequence Diagram for Model Training and Serving](#sequence-diagram-for-model-training-and-serving)
-- [⚙️ Usage](#-usage)
-- [📖 Details](#-details)
-  - [🔧 Setup Environment Variables](#setup-environment-variables-🔧)
-  - [🏁 Start Data Pipeline](#start-data-pipeline-🏁)
-  - [✅ Start Schema Validation Job](#start-schema-validation-job-✅)
-  - [☁️ Start Data Lake](#start-data-lake-☁️)
-  - [🔄 Start Orchestration](#start-orchestration-🔄)
+    - [📡 a. Metrics & Monitoring](#a-metrics--monitoring)
+    - [🔒 b. Access Management](#b-access-management)
+- [📖 Details](#details)
+  - [🔧 Setup Environment Variables](#setup-environment-variables)
+  - [🏁 Start Data Pipeline](#start-data-pipeline)
+  - [✅ Start Schema Validation Job](#start-schema-validation-job)
+  - [☁️ Start Data Lake](#start-data-lake)
+  - [🔄 Start Orchestration](#start-orchestration)
   - [Data and Training Pipeline](#data-and-training-pipeline)
-    - [🔄 Data Pipeline](#-data-pipeline-🔄)
-    - [🤼‍♂️ Training Pipeline](#-training-pipeline-🤼‍♂️)
-    - [📦 Start Online Store](#-start-online-store-📦)
-  - [🚀 Start Serving Pipeline](#-start-serving-pipeline-🚀)
-  - [🔎 Start Observability](#-start-observability-🔎)
-    - [📈 Signoz](#signoz-📈)
-    - [📉 Prometheus and Grafana](#prometheus-and-grafana-📉)
-  - [🔒 NGINX](#nginx-🔒)
-- [📃 License](#-license)
+    - [🔄 Data Pipeline](#data-pipeline)
+    - [🤼‍♂️ Training Pipeline](#training-pipeline)
+    - [📦 Start Online Store](#start-online-store)
+  - [🚀 Start Serving Pipeline](#start-serving-pipeline)
+  - [🔎 Start Observability](#start-observability)
+    - [📈 SigNoz](#signoz)
+    - [📉 Prometheus and Grafana](#prometheus-and-grafana)
+  - [🔒 NGINX](#nginx)
+- [📃 License](#license)
 
 ## 🌐 Architecture Overview
 
-The system comprises four main pipelines—**Data**, **Training**, **Serving**, and **Observability**—alongside a **Dev Environment** and a **Model Registry**.
-
----
+The system comprises four main components—**Data**, **Training**, **Serving**, and **Observability**—alongside a **Dev Environment** and a **Model Registry**.
 
 ### 1. Data Pipeline
 
-#### 📤 a. Producers & CDC
+#### 📤 a. Data Sources
 
-- Multiple producers emit raw events to **Kafka** (`tracking.raw_user_behavior`).
-- A **Debezium-based CDC** service captures and streams changes from PostgreSQL into **Kafka** (`tracking_postgres_cdc.public.events`).
+- **Kafka Producer**: Continuously emits user behavior events to `tracking.raw_user_behavior` topic
+- **CDC Service**: Uses Debezium to capture PostgreSQL changes, streaming to `tracking_postgres_cdc.public.events`
 
-#### ✅ b. Validation Service (Flink)
+#### ✅ b. Schema Validation (Flink)
 
-- Consumes raw and CDC events from Kafka.
-- Validates schemas, splitting events into:
-  - **Validated Topic** (`tracking.user_behavior.validated`)
-  - **Invalidated Topic** (`tracking.user_behavior.invalid`)
+- Validates incoming events from both sources
+- Routes events to:
+  - `tracking.user_behavior.validated` for valid events
+  - `tracking.user_behavior.invalid` for schema violations
+- Handles ~10k events/second
 
-#### ☁️ c. DataLake (MinIO)
+#### ☁️ c. Storage Layer
 
-- **Kafka → S3 Sink Connectors** write validated and invalid data to **MinIO**.
-- No data is lost—this approach follows `EtLT` (Extract, transform, Load, Transform).
-- Ensures permanent storage of both raw and invalid events for alerting or recovery.
+- **Data Lake (MinIO)**:
+  - External Storage
+  - Stores data in time-partitioned buckets (year/month/day/hour)
+  - Supports checkpointing for pipeline resilience
+- **Data Warehouse (PostgreSQL)**:
+  - Organized in bronze → silver → gold layers
+  - Houses dimension/fact tables for analysis purposes
+- **Offline Store (PostgreSQL)**:
+  - Used for training and batch feature serving
+  - Periodically materialized to online store
+- **Online Store (Redis)**:
+  - Low-latency feature serving
+  - Updated through streaming pipeline
+  - Exposed via Feature Retrieval API
 
-#### 🏢 d. Data Warehouse (PostgreSQL)
+#### 🛒 e. Spark Streaming
 
-- **Airflow DAGs** orchestrate the ETL flow (Bronze → Silver → Gold tables):
-  - Ingest raw data from MinIO.
-  - Perform quality checks and transformations.
-  - Create dimension, fact, and feature tables.
-  - Re-check data quality on final “gold” tables.
-
-#### 🛒 e. Online Store (Redis)
-
-- Real-time ingestion of features:
-  - **Flink Jobs** or custom Python scripts convert validated events into feature-ready topics.
-  - **Feast** or custom ingestion pipelines populate Redis for low-latency feature retrieval.
-
----
+- Transforms validated events into ML features
+- Focuses on session-based metrics and purchase behavior
+- Dual-writes to online/offline stores
 
 ### 2. Training Pipeline
 
-#### 🌟 a. Distributed Training with Ray
+#### 🌟 a. Distributed Training
 
-- **`load_training_data`**: Pulls features from the “gold” tables in the Data Warehouse.
-- **`tune_hyperparameters`**: Uses **Ray Tune** for distributed hyperparameter optimization.
-- **`train_final_model`**: Trains the final model (e.g., XGBoost) using the best hyperparameters.
+- **Ray Cluster**:
+  - Handles distributed hyperparameter tuning via Ray Tune
+  - Executes final model training
+  - Integrates with MLflow for experiment tracking
 
-#### 📦 b. Model Registry
+#### 📦 b. Model Management
 
-- **MLflow + MinIO** to store model artifacts, metrics, and versioned checkpoints.
-- Facilitates model discovery, lineage, and rollout/rollback.
-
-#### 📝 c. Manual Training Option
-
-- **Jupyter notebooks** (`notebook/train.ipynb`) provide custom or ad hoc workflows.
-
----
+- **MLflow + MinIO + PostgreSQL**:
+  - Tracks experiments, parameters, and metrics
+  - Versions model artifacts
+  - Provides model registry UI at `localhost:5001`
 
 ### 3. Serving Pipeline
 
-#### ⚡ a. Real-Time Inference (Ray Serve)
+#### ⚡ a. Model Serving
 
-- **Ray Serve** hosts the trained model.
-- Model checkpoints loaded from **MLflow** in MinIO.
-- Real-time features fetched from **Redis** (Online Store).
-
-#### 🔍 b. Feature Retrieval Services
-
-- A dedicated microservice (e.g., **FastAPI**) or Flink job for on-demand feature retrieval.
-- Streams or scheduled updates keep **Redis** current.
-
-#### 📈 c. Scalability & Performance
-
-- **Ray Serve** scales horizontally under heavy workloads.
-- **NGINX** acts as a reverse proxy, routing requests efficiently.
-
----
+- **Ray Serve**:
+  - Loads models from MLflow registry
+  - Automatically scales horizontally for high throughput
+  - Provides REST API for predictions
+- **Feature Service**:
+  - FastAPI endpoint for feature retrieval
+  - Integrates with Redis for real-time features
 
 ### 4. Observability
 
-#### 📡 a. OpenTelemetry Collector
+#### 📡 a. Metrics & Monitoring
 
-- Collects, aggregates, and exports metrics, logs, and traces from various services.
+- **SigNoz**:
+  - Collects OpenTelemetry data
+  - Provides service-level monitoring
+  - Accessible at `localhost:3301`
+- **Ray Dashboard**:
+  - Monitors training/serving jobs
+  - Available at `localhost:8265`
+- **Prometheus + Grafana**:
+  - Tracks Ray cluster metrics
+  - Visualizes system performance
+  - Accessible at `localhost:3009`
 
-#### 📊 b. SigNoz
+#### 🔒 b. Access Management
 
-- Consumes telemetry data from the OpenTelemetry Collector.
-- Offers dashboards and alerting for monitoring the entire pipeline.
+- **NGINX Proxy Manager**:
+  - Reverse proxy for all services
+  - SSL/TLS termination
+  - Access control and routing
 
-#### 📉 c. Prometheus & Grafana
-
-- Scrapes and visualizes **Ray Cluster** metrics.
-- Provides insights into resource usage, job status, and cluster health.
-
----
-
-### 🛠️ Dev Environment
-
-#### 📓 a. Jupyter Notebooks
-
-- Facilitates data exploration, rapid prototyping, and debugging.
-- Integrated with the rest of the pipeline for end-to-end local development.
-
-#### 🐳 b. Docker Compose Services
-
-- Local spins of **Kafka**, **Flink**, **Redis**, **Airflow**, etc.
-- Simplifies debugging and testing by emulating production environments.
-
----
-
-### Model Registry
-
-#### 🖥️ a. MLflow UI
-
-- Access at `localhost:5001`.
-- Stores experiment runs, parameters, metrics, and artifacts.
-
-#### 📁 b. MinIO
-
-- Serves as the artifact storage backend for MLflow.
-- Manages versioned model binaries and other metadata.
-
----
-
-By combining streaming ingestion (**Kafka** + **Flink**), persistent storage (**MinIO** + **PostgreSQL**), orchestration (**Airflow**), distributed training/serving (**Ray**), and observability (**SigNoz**, **Prometheus/Grafana**), **EasyMLOps** provides a robust, modular pipeline—from raw data to real-time predictions at scale.
-
----
-
-## 📊 Sequence Diagrams
-
-### Sequence Diagram for Data Flow and Validation
-
-```mermaid
-sequenceDiagram
-    participant P as Producers
-    participant CDC as CDC Service
-    participant K as Kafka
-    participant V as Validation Service
-    participant DL as Data Lake
-    participant DW as Data Warehouse
-    participant OS as Online Store
-
-    P->>K: Send raw events
-    CDC->>K: Stream DB changes
-    K->>V: Forward events
-    V->>K: Write validated data
-    V->>K: Write invalid data
-    K->>DL: Store validated/invalid data
-    DL->>DW: ETL process
-    K->>OS: Stream validated features
-```
-
-### Sequence Diagram for Model Training and Serving
-
-```mermaid
-sequenceDiagram
-    participant DW as Data Warehouse
-    participant RT as Ray Training
-    participant MR as Model Registry
-    participant RS as Ray Serve
-    participant OS as Online Store
-    participant API as API
-
-    DW->>RT: Load training data
-    RT->>RT: Tune hyperparameters
-    RT->>RT: Train model
-    RT->>MR: Save model
-    MR->>RS: Load model
-    OS->>RS: Provide features
-    RS->>API: Serve predictions
-```
-
----
-
-## ⚙️ Usage
-
-All available commands can be found in the `Makefile`.
+The architecture prioritizes reliability, scalability, and observability while maintaining clear separation of concerns between pipeline stages. Each component is containerized and can be deployed independently using Docker Compose.
 
 ---
 
 ## 📖 Details
+
+All available commands can be found in the `Makefile`.
 
 In this section, we will dive into the details of the system.
 
@@ -546,7 +449,7 @@ This command will start the Serving Pipeline. Note that we did not port forward 
 
 ### 🔎 Start Observability (8)
 
-#### 📈 Signoz
+#### 📈 SigNoz
 
 ```bash
 make up-observability

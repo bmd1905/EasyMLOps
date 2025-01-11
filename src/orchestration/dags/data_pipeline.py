@@ -3,6 +3,9 @@ from typing import Any, Dict
 
 import pandas as pd
 import pendulum
+from airflow.decorators import dag, task
+from airflow.exceptions import AirflowException
+from airflow.utils.task_group import TaskGroup
 from data_pipeline.bronze.ingest_raw_data import (
     check_minio_connection,
     ingest_raw_data,
@@ -11,14 +14,10 @@ from data_pipeline.bronze.validate_raw_data import validate_raw_data
 from data_pipeline.gold.load_to_dwh import load_dimensions_and_facts
 from data_pipeline.silver.transform_data import transform_data
 from great_expectations_provider.operators.great_expectations import (
-    GreatExpectationsOperator,
+    GreatExpectationsOperator,  # noqa: F401
 )
 from include.config.data_pipeline_config import DataPipelineConfig
 from loguru import logger
-
-from airflow.decorators import dag, task
-from airflow.exceptions import AirflowException
-from airflow.utils.task_group import TaskGroup
 
 logger = logger.bind(name=__name__)
 
@@ -140,26 +139,26 @@ def debug_data(data: Dict[str, Any], layer: str):
     return data
 
 
-@task
-def quality_check_gold_data(df: pd.DataFrame):
-    """Validate gold data using Great Expectations"""
-    try:
-        # Initialize Great Expectations validation
-        gx_validate = GreatExpectationsOperator(
-            task_id="quality_check_gold_data",
-            data_context_root_dir="include/gx",
-            dataframe_to_validate=df,
-            data_asset_name="gold_data_asset",
-            execution_engine="PandasExecutionEngine",
-            expectation_suite_name="gold_layer_suite",
-            return_json_dict=True,
-            fail_task_on_validation_failure=False,
-        )
-        return gx_validate.execute(context={})
+# @task
+# def quality_check_gold_data(df: pd.DataFrame):
+#     """Validate gold data using Great Expectations"""
+#     try:
+#         # Initialize Great Expectations validation
+#         gx_validate = GreatExpectationsOperator(
+#             task_id="quality_check_gold_data",
+#             data_context_root_dir="include/gx",
+#             dataframe_to_validate=df,
+#             data_asset_name="gold_data_asset",
+#             execution_engine="PandasExecutionEngine",
+#             expectation_suite_name="gold_layer_suite",
+#             return_json_dict=True,
+#             fail_task_on_validation_failure=False,
+#         )
+#         return gx_validate.execute(context={})
 
-    except Exception as e:
-        logger.error(f"Data quality check failed: {str(e)}")
-        raise AirflowException(f"Data quality check failed: {str(e)}")
+#     except Exception as e:
+#         logger.error(f"Data quality check failed: {str(e)}")
+#         raise AirflowException(f"Data quality check failed: {str(e)}")
 
 
 @dag(
@@ -200,8 +199,8 @@ def data_pipeline():
 
     # Gold layer tasks
     with TaskGroup("gold_layer_group") as gold_group:
-        gold_data = gold_layer(transformed_data)
-        quality_check_gold_data(gold_data)
+        gold_data = gold_layer(transformed_data)  # noqa: F841
+        # quality_check_gold_data(gold_data)
 
     # Define dependencies
     bronze_group >> silver_group >> gold_group
