@@ -284,6 +284,12 @@ After starting the job, you can go to `localhost:9021` and you should see the `t
 
 ![Kafka Topics](./docs/images/kafka-topic-schema-validation.jpg)
 
+Beside that, we can also start the `alert_invalid_events` job to alert the invalid events. Currently, it just print the invalid events to the terminal, but you can modify it easily in the `src/streaming/jobs/alert_invalid_events_job.py` file.
+
+```bash
+make alert_invalid_events
+```
+
 ### 🔄 Transformation Job (4)
 
 First, we need to start the Data Warehouse and the Online Store.
@@ -447,6 +453,8 @@ make up-serving
 This command will start the Serving Pipeline. Note that we did not port forward the `8000` port in the `docker-compose.serving.yaml` file, but we just expose it. The reason is that we use Ray Serve, and the job will be submitted to the Ray Cluster. That is the reason why you see the port `8000` in the `docker-compose.serving.ray` file instead of the `docker-compose.serving.yaml` file.
 
 ![Serving Pipeline](./docs/images/serving-pipeline-swagger-ui.jpg)
+
+Currently, you have to manually restart the Ray Serve job (aka docker container) to load new model from the Model Registry. But in the future, I will add a feature to automatically load the new model from the Model Registry (Jenkins).
 
 ### 🔎 Start Observability (8)
 
