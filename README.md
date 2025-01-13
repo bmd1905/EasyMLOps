@@ -1,8 +1,8 @@
-# 🚀 EasyMLOps
+# 🚀 Customer Purchase Prediction ML System
 
 A MLOps pipeline that transforms e-commerce behavior data into real-time purchase predictions. Built on modern open-source technologies including Kafka, Flink, Spark, Ray, and MLflow, this project demonstrates a complete ML lifecycle from data ingestion through model deployment. The system features automated CDC, multi-layer data warehousing, real-time feature serving, and comprehensive observability.
 
-![EasyMLOps Architecture](./docs/pipeline.png)
+![Architecture](./docs/pipeline.png)
 
 ## 📑 Table of Contents
 
