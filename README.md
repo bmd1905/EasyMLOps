@@ -58,6 +58,7 @@ The system comprises four main components—**Data**, **Training**, **Serving**,
   - `tracking.user_behavior.validated` for valid events
   - `tracking.user_behavior.invalid` for schema violations
 - Handles ~10k events/second
+- Alerts invalid events to Elasticsearch
 
 #### ☁️ Storage Layer
 
@@ -125,6 +126,11 @@ The system comprises four main components—**Data**, **Training**, **Serving**,
   - Tracks Ray cluster metrics
   - Visualizes system performance
   - Accessible at `localhost:3009`
+- **Superset**:
+  - Visualize the data in the Data Warehouse
+  - Accessible at `localhost:8089`
+- **Elasticsearch**:
+  - Alert invalid events
 
 #### 🔒 Access Management
 
@@ -284,11 +290,13 @@ After starting the job, you can go to `localhost:9021` and you should see the `t
 
 ![Kafka Topics](./docs/images/kafka-topic-schema-validation.jpg)
 
-Beside that, we can also start the `alert_invalid_events` job to alert the invalid events. Currently, it just print the invalid events to the terminal, but you can modify it easily in the `src/streaming/jobs/alert_invalid_events_job.py` file.
+Beside that, we can also start the `alert_invalid_events` job to alert the invalid events.
 
 ```bash
 make alert_invalid_events
 ```
+
+**Note**: This feature of pushing the invalid events to **Elasticsearch** is not implemented yet, I will implement it in the future, but you can do it easily by modifying the `src/streaming/jobs/alert_invalid_events_job.py` file.
 
 ### 🔄 Transformation Job (4)
 
@@ -410,6 +418,14 @@ The `data_pipeline` DAG is divided into three layers:
 Trigger the `data_pipeline` DAG, and you should see the tasks running. This DAG will take some time to complete, but you can check the logs in the Airflow UI to monitor the progress. For simplicity, I hardcoded the `MINIO_PATH_PREFIX` to `topics/tracking.user_behavior.validated/year=2025/month=01`. Ideally, you should use the actual timestamp for each run. For example, `validated-events-bucket/topics/tracking.user_behavior.validated/year=2025/month=01/day=07/hour=XX`, where XX is the hour of the day.
 
 I also use checkpointing to ensure the DAG is resilient to failures and can resume from where it left off. The checkpoint is stored in the Data Lake, just under the `MINIO_PATH_PREFIX`, so if the DAG fails, you can simply trigger it again, and it will resume from the last checkpoint.
+
+To visualize the data, you can use **Superset**.
+
+```bash
+make up-superset
+```
+
+Then go to `localhost:8089` and you should see the Superset dashboard. Connect to the `dwh` database and you should see the `dwh` schema.
 
 #### 🤼‍♂️ Training Pipeline (6)
 

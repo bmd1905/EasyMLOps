@@ -14,6 +14,7 @@ CDC_COMPOSE_FILE := docker-compose.cdc.yaml
 SERVING_COMPOSE_FILE := docker-compose.serving.yaml
 NGINX_COMPOSE_FILE := docker-compose.nginx.yaml
 OBSERVABILITY_COMPOSE_FILE := docker-compose.observability.yaml
+SUPERSET_COMPOSE_FILE := docker-compose.superset.yaml
 PYTHON := python3
 
 up-network:
@@ -57,6 +58,9 @@ up-nginx:
 up-observability:
 	docker compose -f $(OBSERVABILITY_COMPOSE_FILE) up -d --build
 
+up-superset:
+	docker compose -f $(SUPERSET_COMPOSE_FILE) up -d --build
+
 # ------------------------------------------ Down Commands ------------------------------------------
 down-network:
 	docker network rm easymlops_network
@@ -98,6 +102,9 @@ down-nginx:
 down-observability:
 	docker compose -f $(OBSERVABILITY_COMPOSE_FILE) down -v
 
+down-superset:
+	docker compose -f $(SUPERSET_COMPOSE_FILE) down -v
+
 # ------------------------------------------ Restart Commands ------------------------------------------
 restart-kafka: down-kafka up-kafka
 restart-orchestration: down-orchestration up-orchestration
@@ -111,7 +118,7 @@ restart-cdc: down-cdc up-cdc
 restart-serving: down-serving up-serving
 restart-nginx: down-nginx up-nginx
 restart-observability: down-observability up-observability
-
+restart-superset: down-superset up-superset
 # ------------------------------------------ Logs Commands ------------------------------------------
 logs-kafka:
 	docker compose -f $(KAFKA_COMPOSE_FILE) logs -f
@@ -149,6 +156,9 @@ logs-nginx:
 logs-observability:
 	docker compose -f $(OBSERVABILITY_COMPOSE_FILE) logs -f
 
+logs-superset:
+	docker compose -f $(SUPERSET_COMPOSE_FILE) logs -f
+
 # ------------------------------------------ Clean Commands ------------------------------------------
 clean:
 	docker compose -f $(KAFKA_COMPOSE_FILE) down -v
@@ -163,6 +173,7 @@ clean:
 	docker compose -f $(SERVING_COMPOSE_FILE) down -v
 	docker compose -f $(NGINX_COMPOSE_FILE) down -v
 	docker compose -f $(OBSERVABILITY_COMPOSE_FILE) down -v
+	docker compose -f $(SUPERSET_COMPOSE_FILE) down -v
 	docker system prune -f
 
 # ------------------------------------------ Utility Commands ------------------------------------------
