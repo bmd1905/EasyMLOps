@@ -1,0 +1,29 @@
+services:
+  # Data Warehouse (aka Offline Store in this project)
+  postgres-dwh:
+    image: postgres:13
+    container_name: postgres-dwh
+    environment:
+      POSTGRES_USER: dwh
+      POSTGRES_PASSWORD: dwh
+      POSTGRES_DB: dwh
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres-dwh-volume:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "dwh"]
+      interval: 10s
+      retries: 5
+      start_period: 5s
+    restart: always
+    networks:
+      - easymlops_network
+
+volumes:
+  postgres-dwh-volume:
+    driver: local
+
+networks:
+  easymlops_network:
+    external: true

@@ -167,3 +167,7 @@ api/redis-data
 
 # DS_Store in subfolders
 **/.DS_Store
+
+# data
+data/
+nginx-data/
