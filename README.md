@@ -1,12 +1,15 @@
 # 🚀 EasyMLOps
 
-A turnkey MLOps pipeline demonstrating how to go from raw events to real-time predictions at scale. This project leverages modern data engineering and ML platforms—including Kafka, Flink, Redis, Ray, and more—to provide an end-to-end solution for data ingestion, validation, training, serving, and observability.
+A MLOps pipeline that transforms e-commerce behavior data into real-time purchase predictions. Built on modern open-source technologies including Kafka, Flink, Spark, Ray, and MLflow, this project demonstrates a complete ML lifecycle from data ingestion through model deployment. The system features automated CDC, multi-layer data warehousing, real-time feature serving, and comprehensive observability.
 
 ![EasyMLOps Architecture](./docs/pipeline.png)
 
 ## 📑 Table of Contents
 
-- [🚀 EasyMLOps](#-easymlops)
+- [📊 Dataset](#-dataset)
+  - [File Structure](#file-structure)
+  - [Event Types](#event-types)
+  - [Modeling: Customer Purchase Prediction](#modeling-customer-purchase-prediction)
 - [🌐 Architecture Overview](#-architecture-overview)
   - [1. Data Pipeline](#1-data-pipeline)
     - [📤 Data Sources](#-data-sources)
@@ -39,6 +42,61 @@ A turnkey MLOps pipeline demonstrating how to go from raw events to real-time pr
   - [🔒 NGINX](#-nginx)
 - [Contributing](#contributing)
 - [📃 License](#-license)
+
+## 📊 Dataset
+
+> eCommerce Behavior Data from Multi Category Store
+
+The dataset can be found [here](https://www.kaggle.com/datasets/mkechinov/ecommerce-behavior-data-from-multi-category-store/data). This dataset contains behavior data from over 285 million user events on a large multi-category eCommerce website.
+
+The data spans 7 months (October 2019 to April 2020) and captures user-product interactions like views, cart additions/removals, and purchases. Each event represents a many-to-many relationship between users and products.
+
+The dataset was collected by the Open CDP project, an open source customer data platform that enables tracking and analysis of user behavior data.
+
+### File Structure
+
+| Field         | Description                                                          |
+| ------------- | -------------------------------------------------------------------- |
+| event_time    | UTC timestamp when the event occurred                                |
+| event_type    | Type of user interaction event                                       |
+| product_id    | Unique identifier for the product                                    |
+| category_id   | Product category identifier                                          |
+| category_code | Product category taxonomy (when available for meaningful categories) |
+| brand         | Brand name (lowercase, may be missing)                               |
+| price         | Product price (float)                                                |
+| user_id       | Permanent user identifier                                            |
+| user_session  | Temporary session ID that changes after long user inactivity         |
+
+### Event Types
+
+The dataset captures four types of user interactions:
+
+- **view**: User viewed a product
+- **cart**: User added a product to shopping cart
+- **remove_from_cart**: User removed a product from shopping cart
+- **purchase**: User purchased a product
+
+### Modeling: Customer Purchase Prediction
+
+The core modeling task is to predict whether a user will purchase a product at the moment they add it to their shopping cart.
+
+#### Feature Engineering
+
+We transform the raw event data into meaningful features for our machine learning model. The analysis focuses specifically on cart addition events and their subsequent outcomes.
+
+Key engineered features include:
+
+| Feature              | Description                                                 |
+| -------------------- | ----------------------------------------------------------- |
+| category_code_level1 | Main product category                                       |
+| category_code_level2 | Product sub-category                                        |
+| event_weekday        | Day of week when cart addition occurred                     |
+| activity_count       | Total user activities in the current session                |
+| price                | Original product price                                      |
+| brand                | Product brand name                                          |
+| is_purchased         | Target variable: whether cart item was eventually purchased |
+
+You can download the dataset and put it under the `data` folder.
 
 ## 🌐 Architecture Overview
 
